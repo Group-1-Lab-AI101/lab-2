@@ -26,6 +26,8 @@ All evaluation values below were computed from the untouched held-out test parti
 
 Accuracy is the overall fraction classified correctly. Precision measures how often predicted subscriptions were correct; recall measures how many actual subscriptions were detected; F1 balances precision and recall. ROC-AUC measures ranking discrimination across thresholds, while the error rate is the fraction classified incorrectly.
 
+Because the held-out set is imbalanced, an always-`no` reference would achieve accuracy 0.883003. The baseline accuracy is 0.009289 lower than that reference. The always-majority rule would detect no positive subscriptions, whereas the fitted baseline identifies 498 true positives; therefore accuracy must be interpreted together with positive-class recall, F1-score, and the confusion matrix. This is evaluation context, not an additional improvement experiment.
+
 ## Confusion Matrix
 
 ![Baseline confusion matrix](../outputs/figures/confusion_matrix.png)
@@ -99,7 +101,7 @@ An importance value is the normalized total impurity reduction attributed to a t
 ## Weaknesses of the Baseline Tree
 
 - Its depth, leaf count, and measured train-test gap make the unrestricted baseline difficult to interpret in full and indicate poor generalization relative to its training fit.
-- Positive-class performance is weaker than overall accuracy when recall/F1 are considered, so accuracy alone would hide important errors on the minority `yes` class.
+- Its accuracy is below the always-majority reference on this imbalanced test set, and positive-class recall/F1 remain weak; accuracy alone would therefore be misleading.
 - Impurity-based feature importance is model-specific and non-causal.
 - The `duration` predictor is only known after a marketing call finishes. Its use is valid for reproducing the selected dataset baseline, but it would be unavailable for a pre-call targeting system and is therefore a deployment-time leakage concern, not a train/test leakage bug.
 

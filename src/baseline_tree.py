@@ -103,7 +103,23 @@ def evaluate_classifier(
         output_dict=True,
         zero_division=0,
     )
+    # ``classification_report(..., output_dict=True)`` returns accuracy as a
+    # scalar while every other entry is a mapping. Passing that mixed mapping
+    # straight to ``DataFrame`` broadcasts accuracy into every column, including
+    # ``support``. Build the summary row explicitly so the exported table keeps
+    # sklearn's text-report semantics: accuracy is shown in the f1-score column
+    # and support is the number of held-out observations.
+    report_accuracy = float(report.pop("accuracy"))
     report_frame = pd.DataFrame(report).transpose()
+    report_frame.loc["accuracy"] = {
+        "precision": np.nan,
+        "recall": np.nan,
+        "f1-score": report_accuracy,
+        "support": float(len(y_test)),
+    }
+    report_frame = report_frame.loc[
+        [*display_names, "accuracy", "macro avg", "weighted avg"]
+    ]
     metrics = {
         "accuracy": float(test_accuracy),
         "error_rate": float(1.0 - test_accuracy),

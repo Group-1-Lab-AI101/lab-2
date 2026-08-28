@@ -157,6 +157,12 @@ def render_baseline_report(
         os.path.relpath(trees_dir.resolve(), start=report_path.parent.resolve())
     )
     matrix = metrics["confusion_matrix"]
+    class_support = [sum(row) for row in matrix]
+    test_observations = sum(class_support)
+    majority_class_index = int(np.argmax(class_support))
+    majority_class_name = metrics["class_labels"][majority_class_index]
+    majority_accuracy = class_support[majority_class_index] / test_observations
+    majority_accuracy_gap = metrics["accuracy"] - majority_accuracy
     top_features = importance.head(10)
     config_text = ", ".join(f"`{key}={value!r}`" for key, value in configuration.items())
     feature_rows = "\n".join(
@@ -217,6 +223,8 @@ All evaluation values below were computed from the untouched held-out test parti
 
 Accuracy is the overall fraction classified correctly. Precision measures how often predicted subscriptions were correct; recall measures how many actual subscriptions were detected; F1 balances precision and recall. ROC-AUC measures ranking discrimination across thresholds, while the error rate is the fraction classified incorrectly.
 
+Because the held-out set is imbalanced, an always-`{majority_class_name}` reference would achieve accuracy {majority_accuracy:.6f}. The baseline accuracy is {abs(majority_accuracy_gap):.6f} {'higher' if majority_accuracy_gap >= 0 else 'lower'} than that reference. The always-majority rule would detect no positive subscriptions, whereas the fitted baseline identifies {matrix[1][1]} true positives; therefore accuracy must be interpreted together with positive-class recall, F1-score, and the confusion matrix. This is evaluation context, not an additional improvement experiment.
+
 ## Confusion Matrix
 
 ![Baseline confusion matrix]({relative_figures / 'confusion_matrix.png'})
@@ -272,7 +280,7 @@ An importance value is the normalized total impurity reduction attributed to a t
 ## Weaknesses of the Baseline Tree
 
 - Its depth, leaf count, and measured train-test gap make the unrestricted baseline difficult to interpret in full and indicate poor generalization relative to its training fit.
-- Positive-class performance is weaker than overall accuracy when recall/F1 are considered, so accuracy alone would hide important errors on the minority `yes` class.
+- Its accuracy is below the always-majority reference on this imbalanced test set, and positive-class recall/F1 remain weak; accuracy alone would therefore be misleading.
 - Impurity-based feature importance is model-specific and non-causal.
 - The `duration` predictor is only known after a marketing call finishes. Its use is valid for reproducing the selected dataset baseline, but it would be unavailable for a pre-call targeting system and is therefore a deployment-time leakage concern, not a train/test leakage bug.
 

@@ -52,6 +52,8 @@ lab-2/
 │   ├── pruning_experiment.py   # Kiet: ccp_alpha, Gini/Entropy, size trade-off
 │   └── experiment_contract.py  # frozen comparison contract
 ├── tests/
+├── experiments/
+│   └── 2-BASELINE-DECISION-TREE.ipynb # English presentation notebook
 ├── outputs/
 │   ├── figures/                # EDA, baseline, tuning, and pruning PNG figures
 │   ├── shared/                 # official preprocessor and split identity
@@ -125,6 +127,9 @@ Tất cả cách cài đặt trên đều đưa dependency vào `.venv` của d�
 `run_all.py` luôn tái tạo tuần tự phần Khang, baseline của Hoàng, thí nghiệm
 hyperparameter tuning của Hậu và thí nghiệm pruning của Kiệt:
 
+Phần dữ liệu và preprocessing được giữ ở dạng module Python dùng chung; notebook
+trình bày chỉ import các module này và không sao chép pipeline.
+
 ```bash
 uv run python run_all.py
 ```
@@ -161,6 +166,27 @@ Kết quả mặc định:
 - `docs/hau_improvement_methods.md`: phương pháp và kết quả tuning của Hậu;
 - `docs/kiet_pruning_and_criterion.md`: phần Improvement Methods - Phương pháp 2;
 - `docs/BASELINE_HANDOFF.md`: hợp đồng thí nghiệm và hướng dẫn bàn giao.
+
+For presentation or video recording, open the English notebook
+[`experiments/2-BASELINE-DECISION-TREE.ipynb`](experiments/2-BASELINE-DECISION-TREE.ipynb):
+
+```bash
+.venv/bin/jupyter lab
+```
+
+Select **Run All Cells**. The notebook directly reuses the shared `src.data` and
+`src.preprocessing` modules, then presents the metrics, confusion matrix, ROC
+curve, tree structure, feature importance, representative rules, and baseline
+interpretation. It can also be executed without the graphical interface:
+
+```bash
+.venv/bin/jupyter nbconvert --to notebook --execute --inplace \
+  experiments/2-BASELINE-DECISION-TREE.ipynb
+```
+
+`run_all.py` remains the canonical entry point for reproducible artifacts and
+report material. The notebook is a presentation layer, not a second
+preprocessing pipeline or an alternative experiment runner.
 
 ## Pipeline chung cho các thành viên tiếp theo
 

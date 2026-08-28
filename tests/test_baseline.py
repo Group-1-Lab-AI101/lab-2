@@ -89,8 +89,16 @@ class BaselineTests(unittest.TestCase):
         importance = extract_feature_importance(model, self.feature_names)
         self.assertEqual(len(predictions), len(self.split.y_test))
         self.assertIn("yes", report.index)
+        self.assertTrue(np.isnan(report.loc["accuracy", "precision"]))
+        self.assertTrue(np.isnan(report.loc["accuracy", "recall"]))
+        self.assertAlmostEqual(
+            report.loc["accuracy", "f1-score"], metrics["accuracy"]
+        )
+        self.assertEqual(report.loc["accuracy", "support"], len(self.split.y_test))
         self.assertEqual(metrics["positive_class"], "yes")
         self.assertEqual(metrics["positive_class_encoded_value"], 1)
+        majority_accuracy = self.split.y_test.value_counts(normalize=True).max()
+        self.assertLess(metrics["accuracy"], majority_accuracy)
         self.assertGreaterEqual(metrics["roc_auc"], 0.0)
         self.assertLessEqual(metrics["roc_auc"], 1.0)
         self.assertEqual(len(importance), self.X_train_processed.shape[1])
