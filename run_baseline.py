@@ -22,7 +22,6 @@ import pandas as pd
 import sklearn
 
 from src.artifact_utils import file_sha256, index_fingerprint, save_json
-from src.bank_data import load_shared_experiment_data, preprocessing_audit
 from src.baseline_tree import (
     baseline_configuration,
     evaluate_classifier,
@@ -39,14 +38,19 @@ from src.baseline_tree import (
     train_baseline_tree,
     write_representative_rules,
 )
+from src.data import load_and_split_data
 from src.experiment_contract import (
+    CLASS_DISPLAY_NAMES,
+    DATASET_DISPLAY_PATH,
     DATASET_PATH,
     POSITIVE_CLASS,
+    POSITIVE_CLASS_NAME,
     RANDOM_STATE,
     SPLIT_STRATEGY,
     TARGET_COLUMN,
     TEST_SIZE,
 )
+from src.preprocessing import build_preprocessing_pipeline, get_encoded_feature_names
 
 
 DEFAULT_OUTPUT = Path("artifacts/baseline")
@@ -62,6 +66,42 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument("--shared-output-dir", type=Path, default=DEFAULT_SHARED_OUTPUT)
     return parser.parse_args()
+
+
+def build_preprocessing_audit(
+    split: Any,
+    X_train_processed: Any,
+    X_test_processed: Any,
+    feature_names: np.ndarray,
+) -> dict[str, Any]:
+    """Record leakage and alignment checks around Khang's fitted pipeline."""
+
+    train_indices = split.X_train.index.to_numpy(dtype=np.int64, copy=True)
+    test_indices = split.X_test.index.to_numpy(dtype=np.int64, copy=True)
+    return {
+        "shared_pipeline": "src.data + src.preprocessing",
+        "split_before_preprocessor_fit": True,
+        "preprocessor_fit_partition": "training only",
+        "test_partition_usage": "transform and evaluation only",
+        "target_column": TARGET_COLUMN,
+        "target_excluded_from_raw_partitions": TARGET_COLUMN
+        not in split.X_train.columns
+        and TARGET_COLUMN not in split.X_test.columns,
+        "target_excluded_from_transformed_features": TARGET_COLUMN
+        not in set(feature_names),
+        "train_test_indices_disjoint": bool(
+            np.intersect1d(train_indices, test_indices).size == 0
+        ),
+        "split_row_count": int(len(train_indices) + len(test_indices)),
+        "feature_name_count": int(len(feature_names)),
+        "transformed_train_column_count": int(X_train_processed.shape[1]),
+        "transformed_test_column_count": int(X_test_processed.shape[1]),
+        "feature_names_aligned": bool(
+            X_train_processed.shape[1]
+            == X_test_processed.shape[1]
+            == len(feature_names)
+        ),
+    }
 
 
 def render_report(
@@ -124,7 +164,7 @@ def render_report(
 
 This section reports only Hoang's baseline Decision Tree and analysis. The source file was `{dataset_path}` with {row_count:,} observations, {raw_feature_count} raw predictors, and the binary target `y`. The positive class is `{metrics['positive_class']}`, meaning that the client subscribed to a term deposit.
 
-Because Khang has not yet implemented his owned data section, the first repository member supplied the minimum shared experiment contract needed for a runnable baseline: a stratified {(1-test_size):.0%}/{test_size:.0%} train/test split with `random_state={random_state}`, followed by one-hot encoding of categorical predictors and passthrough of numerical predictors. The encoder was fitted on the training partition only. It produced {transformed_feature_count} correctly named transformed features. Future experiments must reuse this exact bundle rather than create another split or preprocessor. Khang may later assume ownership and extend the implementation while preserving the frozen partition contract.
+Hoang's baseline directly reuses Khang's shared data and preprocessing modules: `src.data.load_and_split_data()` performs a stratified {(1-test_size):.0%}/{test_size:.0%} train/test split with `random_state={random_state}`, and `src.preprocessing.build_preprocessing_pipeline()` applies one-hot encoding to categorical predictors with numerical passthrough. The target is mapped as `no=0` and `yes=1`; report labels use the original class names. The encoder was fitted on the training partition only and produced {transformed_feature_count} correctly named transformed features.
 
 The true untuned baseline was `DecisionTreeClassifier` with the following exact configuration: {config_text}. No hyperparameter search, pruning, class weighting, or cross-validation tuning was performed.
 
@@ -209,7 +249,7 @@ An importance value is the normalized total impurity reduction attributed to a t
 
 {leakage_checks}
 
-The test partition was never supplied to model or preprocessing `fit`, and the target was removed before splitting predictors. No test result was used to tune this baseline. The shared implementation remains provisional in ownership until Khang's work is merged, but the recorded split identity must be preserved so every later experiment remains directly comparable.
+The test partition was never supplied to model or preprocessing `fit`, and the target was removed before splitting predictors. No test result was used to tune this baseline. Khang's original train/test indices are fingerprinted in the shared manifest so every later experiment can verify direct comparability.
 """
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(report, encoding="utf-8")
@@ -220,12 +260,28 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     args.shared_output_dir.mkdir(parents=True, exist_ok=True)
 
-    prepared = load_shared_experiment_data()
-    audit = preprocessing_audit(prepared)
+    split = load_and_split_data(
+        DATASET_PATH,
+        test_size=TEST_SIZE,
+        random_state=RANDOM_STATE,
+    )
+    preprocessing_pipeline = build_preprocessing_pipeline()
+    X_train_processed = preprocessing_pipeline.fit_transform(split.X_train)
+    X_test_processed = preprocessing_pipeline.transform(split.X_test)
+    feature_names = np.asarray(
+        get_encoded_feature_names(preprocessing_pipeline), dtype=str
+    )
+    train_row_indices = split.X_train.index.to_numpy(dtype=np.int64, copy=True)
+    test_row_indices = split.X_test.index.to_numpy(dtype=np.int64, copy=True)
+    audit = build_preprocessing_audit(
+        split,
+        X_train_processed,
+        X_test_processed,
+        feature_names,
+    )
     if not all(
         audit[key]
         for key in (
-            "target_excluded_from_raw_features",
             "target_excluded_from_transformed_features",
             "target_excluded_from_raw_partitions",
             "train_test_indices_disjoint",
@@ -235,22 +291,28 @@ def main() -> None:
         raise RuntimeError(f"Preprocessing audit failed: {audit}")
 
     model = train_baseline_tree(
-        prepared.X_train_processed,
-        prepared.y_train,
+        X_train_processed,
+        split.y_train,
     )
     metrics, classification_report_frame, y_test_pred = evaluate_classifier(
         model,
-        prepared.X_train_processed,
-        prepared.y_train,
-        prepared.X_test_processed,
-        prepared.y_test,
-        positive_label=prepared.positive_label,
+        X_train_processed,
+        split.y_train,
+        X_test_processed,
+        split.y_test,
+        positive_label=POSITIVE_CLASS,
+        positive_class_name=POSITIVE_CLASS_NAME,
+        class_display_names=CLASS_DISPLAY_NAMES,
     )
     configuration = baseline_configuration(model)
-    importance = extract_feature_importance(model, prepared.feature_names)
-    statistics = extract_tree_statistics(model, prepared.feature_names, metrics)
-    early_splits = extract_early_splits(model, prepared.feature_names)
-    rules = extract_representative_rules(model, prepared.feature_names)
+    importance = extract_feature_importance(model, feature_names)
+    statistics = extract_tree_statistics(model, feature_names, metrics)
+    early_splits = extract_early_splits(
+        model, feature_names, class_display_names=CLASS_DISPLAY_NAMES
+    )
+    rules = extract_representative_rules(
+        model, feature_names, class_display_names=CLASS_DISPLAY_NAMES
+    )
 
     save_json(metrics, args.output_dir / "baseline_metrics.json")
     pd.DataFrame(
@@ -263,71 +325,85 @@ def main() -> None:
     save_json({"splits": early_splits}, args.output_dir / "early_splits.json")
     save_json(audit, args.output_dir / "preprocessing_audit.json")
     (args.output_dir / "early_tree.txt").write_text(
-        extract_early_tree_text(model, prepared.feature_names), encoding="utf-8"
+        extract_early_tree_text(model, feature_names), encoding="utf-8"
     )
     write_representative_rules(rules, args.output_dir / "representative_rules.md")
 
     plot_confusion_matrix(
-        prepared.y_test,
+        split.y_test,
         y_test_pred,
         model.classes_,
         args.output_dir / "confusion_matrix.png",
+        class_display_names=CLASS_DISPLAY_NAMES,
     )
     plot_tree_top_levels(
         model,
-        prepared.feature_names,
+        feature_names,
         args.output_dir / "baseline_tree_top_levels.png",
+        class_display_names=CLASS_DISPLAY_NAMES,
     )
-    plot_full_tree_structure(model, args.output_dir / "baseline_tree_full_structure.png")
+    plot_full_tree_structure(
+        model,
+        args.output_dir / "baseline_tree_full_structure.png",
+        class_display_names=CLASS_DISPLAY_NAMES,
+    )
     export_full_tree_dot(
-        model, prepared.feature_names, args.output_dir / "baseline_tree_full.dot"
+        model,
+        feature_names,
+        args.output_dir / "baseline_tree_full.dot",
+        class_display_names=CLASS_DISPLAY_NAMES,
     )
     plot_feature_importance(
         importance, args.output_dir / "top_feature_importance.png", top_n=15
     )
     joblib.dump(model, args.output_dir / "baseline_tree_model.joblib")
-    joblib.dump(prepared.preprocessor, args.shared_output_dir / "preprocessor.joblib")
+    joblib.dump(preprocessing_pipeline, args.shared_output_dir / "preprocessor.joblib")
     np.savez_compressed(
         args.shared_output_dir / "split_indices.npz",
-        train=prepared.train_row_indices,
-        test=prepared.test_row_indices,
+        train=train_row_indices,
+        test=test_row_indices,
     )
 
     dataset_sha256 = file_sha256(DATASET_PATH)
     shared_manifest = {
-        "dataset_path": str(DATASET_PATH),
+        "dataset_path": str(DATASET_DISPLAY_PATH),
         "dataset_sha256": dataset_sha256,
         "target_column": TARGET_COLUMN,
         "positive_class": POSITIVE_CLASS,
+        "positive_class_name": POSITIVE_CLASS_NAME,
         "test_size": TEST_SIZE,
         "random_state": RANDOM_STATE,
         "split_strategy": SPLIT_STRATEGY,
         "stratified_by": TARGET_COLUMN,
-        "train_rows": int(len(prepared.y_train)),
-        "test_rows": int(len(prepared.y_test)),
-        "train_indices_sha256": index_fingerprint(prepared.train_row_indices),
-        "test_indices_sha256": index_fingerprint(prepared.test_row_indices),
-        "categorical_encoding": "OneHotEncoder(handle_unknown='ignore', sparse_output=False)",
+        "train_rows": int(len(split.y_train)),
+        "test_rows": int(len(split.y_test)),
+        "train_indices_sha256": index_fingerprint(train_row_indices),
+        "test_indices_sha256": index_fingerprint(test_row_indices),
+        "categorical_encoding": "OneHotEncoder(handle_unknown='ignore', sparse_output=True)",
         "numeric_processing": "passthrough",
         "preprocessor_fit_partition": "training only",
-        "transformed_feature_names": prepared.feature_names.tolist(),
+        "shared_data_entry_point": "src.data.load_and_split_data",
+        "shared_preprocessing_entry_point": "src.preprocessing.build_preprocessing_pipeline",
+        "target_mapping": {"no": 0, "yes": 1},
+        "transformed_feature_names": feature_names.tolist(),
     }
     save_json(shared_manifest, args.shared_output_dir / "split_manifest.json")
 
     manifest = {
         "scope": "Hoang baseline Decision Tree and resulting-tree analysis only",
-        "dataset_path": str(DATASET_PATH),
+        "dataset_path": str(DATASET_DISPLAY_PATH),
         "dataset_sha256": dataset_sha256,
-        "dataset_rows": int(len(prepared.y_train) + len(prepared.y_test)),
-        "raw_predictors": int(len(prepared.raw_feature_names)),
-        "transformed_features": int(len(prepared.feature_names)),
-        "train_rows": int(len(prepared.y_train)),
-        "test_rows": int(len(prepared.y_test)),
+        "dataset_rows": int(len(split.y_train) + len(split.y_test)),
+        "raw_predictors": int(split.X_train.shape[1]),
+        "transformed_features": int(len(feature_names)),
+        "train_rows": int(len(split.y_train)),
+        "test_rows": int(len(split.y_test)),
         "test_size": TEST_SIZE,
         "random_state": RANDOM_STATE,
         "train_indices_sha256": shared_manifest["train_indices_sha256"],
         "test_indices_sha256": shared_manifest["test_indices_sha256"],
-        "positive_label": prepared.positive_label,
+        "positive_label": POSITIVE_CLASS_NAME,
+        "positive_label_encoded_value": POSITIVE_CLASS,
         "configuration": configuration,
         "versions": {
             "python": platform.python_version(),
@@ -342,10 +418,10 @@ def main() -> None:
     render_report(
         report_path=args.report,
         output_dir=args.output_dir,
-        dataset_path=DATASET_PATH,
-        row_count=len(prepared.y_train) + len(prepared.y_test),
-        raw_feature_count=len(prepared.raw_feature_names),
-        transformed_feature_count=len(prepared.feature_names),
+        dataset_path=DATASET_DISPLAY_PATH,
+        row_count=len(split.y_train) + len(split.y_test),
+        raw_feature_count=split.X_train.shape[1],
+        transformed_feature_count=len(feature_names),
         test_size=TEST_SIZE,
         random_state=RANDOM_STATE,
         configuration=configuration,

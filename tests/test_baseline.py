@@ -1,97 +1,97 @@
-"""Focused tests for Hoang's baseline-only functions."""
+"""Regression checks for Hoang's baseline on Khang's shared pipeline."""
 
 from __future__ import annotations
 
 import unittest
 from unittest.mock import patch
 
-import pandas as pd
+import numpy as np
 
-from src.bank_data import prepare_bank_data, preprocessing_audit
+from src.artifact_utils import index_fingerprint
 from src.baseline_tree import (
     baseline_configuration,
     evaluate_classifier,
     extract_feature_importance,
     train_baseline_tree,
 )
-from src.experiment_contract import FROZEN_BASELINE_PARAMETERS, RANDOM_STATE, TEST_SIZE
+from src.data import load_and_split_data
+from src.experiment_contract import (
+    CLASS_DISPLAY_NAMES,
+    FROZEN_BASELINE_PARAMETERS,
+    POSITIVE_CLASS,
+    POSITIVE_CLASS_NAME,
+    RANDOM_STATE,
+    TEST_SIZE,
+)
+from src.preprocessing import build_preprocessing_pipeline, get_encoded_feature_names
 
 
 class BaselineTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.frame = pd.DataFrame(
-            {
-                "age": list(range(20, 60)),
-                "job": ["admin", "student", "technician", "services"] * 10,
-                "duration": [value * 11 % 300 for value in range(40)],
-                "y": ["no", "no", "yes", "no"] * 10,
-            }
+    """Ensure integration does not change the shared split or frozen model."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.split = load_and_split_data(
+            test_size=TEST_SIZE,
+            random_state=RANDOM_STATE,
+        )
+        cls.preprocessing = build_preprocessing_pipeline()
+        cls.X_train_processed = cls.preprocessing.fit_transform(cls.split.X_train)
+        cls.X_test_processed = cls.preprocessing.transform(cls.split.X_test)
+        cls.feature_names = np.asarray(
+            get_encoded_feature_names(cls.preprocessing), dtype=str
         )
 
-    def test_preprocessing_excludes_target_and_aligns_names(self) -> None:
-        prepared = prepare_bank_data(self.frame)
-        audit = preprocessing_audit(prepared)
-        self.assertTrue(audit["target_excluded_from_raw_features"])
-        self.assertTrue(audit["target_excluded_from_transformed_features"])
-        self.assertTrue(audit["feature_names_aligned"])
-        self.assertTrue(audit["train_test_indices_disjoint"])
-        self.assertNotIn("y", prepared.feature_names)
-        self.assertNotIn("y", prepared.X_train_raw.columns)
-        self.assertNotIn("y", prepared.X_test_raw.columns)
-        self.assertEqual(len(prepared.y_test), int(len(self.frame) * TEST_SIZE))
+    def test_shared_split_identity_and_target_exclusion(self) -> None:
+        self.assertEqual(len(self.split.X_train), 36_168)
+        self.assertEqual(len(self.split.X_test), 9_043)
+        self.assertFalse(set(self.split.X_train.index) & set(self.split.X_test.index))
+        self.assertNotIn("y", self.split.X_train.columns)
+        self.assertNotIn("y", self.split.X_test.columns)
+        self.assertEqual(
+            index_fingerprint(self.split.X_train.index.to_numpy()),
+            "b078ac348228f8e49c30af463dc1198fb5e8e11d6379e5d842caf580fc728469",
+        )
+        self.assertEqual(
+            index_fingerprint(self.split.X_test.index.to_numpy()),
+            "c1c3c7f5f45b5ba6159c45650c2f59b8270c4314b3e403e8a549f9047d292055",
+        )
 
-    def test_baseline_evaluation_and_importance_are_consistent(self) -> None:
-        prepared = prepare_bank_data(self.frame)
-        model = train_baseline_tree(prepared.X_train_processed, prepared.y_train)
+    def test_preprocessing_and_feature_names_align(self) -> None:
+        self.assertEqual(self.X_train_processed.shape, (36_168, 51))
+        self.assertEqual(self.X_test_processed.shape, (9_043, 51))
+        self.assertEqual(len(self.feature_names), 51)
+        self.assertNotIn("y", self.feature_names)
+
+    def test_baseline_evaluation_uses_probabilities(self) -> None:
+        model = train_baseline_tree(self.X_train_processed, self.split.y_train)
         with patch.object(model, "predict_proba", wraps=model.predict_proba) as probabilities:
             metrics, report, predictions = evaluate_classifier(
                 model,
-                prepared.X_train_processed,
-                prepared.y_train,
-                prepared.X_test_processed,
-                prepared.y_test,
-                positive_label="yes",
+                self.X_train_processed,
+                self.split.y_train,
+                self.X_test_processed,
+                self.split.y_test,
+                positive_label=POSITIVE_CLASS,
+                positive_class_name=POSITIVE_CLASS_NAME,
+                class_display_names=CLASS_DISPLAY_NAMES,
             )
             probabilities.assert_called_once()
-        importance = extract_feature_importance(model, prepared.feature_names)
-        self.assertEqual(len(predictions), len(prepared.y_test))
+
+        importance = extract_feature_importance(model, self.feature_names)
+        self.assertEqual(len(predictions), len(self.split.y_test))
         self.assertIn("yes", report.index)
+        self.assertEqual(metrics["positive_class"], "yes")
+        self.assertEqual(metrics["positive_class_encoded_value"], 1)
         self.assertGreaterEqual(metrics["roc_auc"], 0.0)
         self.assertLessEqual(metrics["roc_auc"], 1.0)
-        self.assertEqual(len(importance), prepared.X_train_processed.shape[1])
+        self.assertEqual(len(importance), self.X_train_processed.shape[1])
         self.assertAlmostEqual(importance["Importance"].sum(), 1.0)
         self.assertEqual(baseline_configuration(model), dict(FROZEN_BASELINE_PARAMETERS))
-        self.assertEqual(model.random_state, RANDOM_STATE)
-
-    def test_shared_split_is_exactly_reproducible(self) -> None:
-        first = prepare_bank_data(self.frame)
-        second = prepare_bank_data(self.frame)
-        self.assertListEqual(
-            first.train_row_indices.tolist(), second.train_row_indices.tolist()
-        )
-        self.assertListEqual(
-            first.test_row_indices.tolist(), second.test_row_indices.tolist()
-        )
-        self.assertListEqual(first.y_test.tolist(), second.y_test.tolist())
 
     def test_frozen_baseline_mapping_is_immutable(self) -> None:
         with self.assertRaises(TypeError):
             FROZEN_BASELINE_PARAMETERS["random_state"] = 7  # type: ignore[index]
-
-    def test_encoder_learns_categories_from_training_rows_only(self) -> None:
-        frame = pd.DataFrame(
-            {
-                "value": list(range(100)),
-                "unique_category": [f"category_{index}" for index in range(100)],
-                "y": ["no", "yes"] * 50,
-            }
-        )
-        prepared = prepare_bank_data(frame)
-        learned = set(prepared.preprocessor.named_transformers_["categorical"].categories_[0])
-        train_categories = set(prepared.X_train_raw["unique_category"])
-        test_categories = set(prepared.X_test_raw["unique_category"])
-        self.assertSetEqual(learned, train_categories)
-        self.assertTrue(test_categories.isdisjoint(learned))
 
 
 if __name__ == "__main__":

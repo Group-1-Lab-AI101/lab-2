@@ -1,56 +1,40 @@
 # Baseline Handoff
 
-This document freezes the experiment contract established by the first member
-of the repository. Khang has not implemented his officially owned data section
-yet, so the current shared pipeline is intentionally minimal. It exists to make
-Hoang's baseline executable and to keep every later model on the same data.
+Khang's official data, EDA, split, and preprocessing implementation is now the
+shared source of truth. Hoang's frozen baseline consumes those modules directly.
 
 # Shared Experiment Contract
 
 | Setting | Frozen value |
 | --- | --- |
-| Dataset | `data/raw/bank-full.csv` |
+| Dataset | `data/bank-full.csv` |
 | Dataset SHA-256 | `d1513ec63b385506f7cfce9f2c5caa9fe99e7ba4e8c3fa264b3aaf0f849ed32d` |
-| Target column | `y` |
-| Positive class | `yes` |
-| Split | 80% train / 20% test |
-| Split strategy | Stratified random split on `y` |
-| Training rows | 36,168 |
-| Test rows | 9,043 |
+| Target | `y`; mapping `no=0`, `yes=1` |
+| Positive class | `yes` (`1`) |
+| Split | Stratified 80% train / 20% test on `y` |
+| Training / test rows | 36,168 / 9,043 |
 | `random_state` | `42` |
-| Shared entry point | `src.bank_data.load_shared_experiment_data()` |
+| Split entry point | `src.data.load_and_split_data()` |
+| Preprocessing entry point | `src.preprocessing.build_preprocessing_pipeline()` |
 
-The source of truth for these constants is `src/experiment_contract.py`. The
-baseline CLI deliberately does not accept alternate split ratios or seeds.
+Khang's pipeline one-hot encodes the nine categorical columns with
+`handle_unknown="ignore"` and sparse output. The seven numerical columns pass
+through unchanged. It must be fitted on `X_train` only; `X_test` is transform-only.
+The target is removed before splitting predictors. Ordered transformed names are
+retrieved with `src.preprocessing.get_encoded_feature_names()`.
 
-`load_shared_experiment_data()` returns one `PreparedData` bundle containing:
+The frozen constants used by Hoang are in `src/experiment_contract.py`. The
+baseline CLI cannot change the dataset, split ratio, or seed. Generated shared
+records are stored in `artifacts/shared/`:
 
-- `X_train_raw`, `X_test_raw`, `y_train`, and `y_test`;
-- `preprocessor`, fitted only on `X_train_raw`;
-- `X_train_processed` and `X_test_processed`;
-- `feature_names`, obtained from the fitted
-  `ColumnTransformer.get_feature_names_out()`;
-- original `train_row_indices` and `test_row_indices` for split verification.
-
-Categorical columns are encoded by
-`OneHotEncoder(handle_unknown="ignore", sparse_output=False)`. Numeric columns
-are passed through unchanged. The raw split happens before the preprocessor is
-fitted, and the test partition is transform-only. The target is removed before
-splitting predictors and is absent from raw and transformed inputs.
-
-The generated shared records are:
-
-- `artifacts/shared/preprocessor.joblib`;
-- `artifacts/shared/split_indices.npz`;
-- `artifacts/shared/split_manifest.json`.
-
-The split fingerprints in `split_manifest.json` allow another run to verify the
-exact ordered row selections, not merely the same train/test counts.
+- `preprocessor.joblib`: Khang's fitted preprocessing pipeline;
+- `split_indices.npz`: original ordered train/test row indices;
+- `split_manifest.json`: checksum, split fingerprints, encoding, and feature names.
 
 # Frozen Baseline
 
-Hoang's baseline constructor is frozen in `src.baseline_tree.py` and reads the
-immutable `FROZEN_BASELINE_PARAMETERS` mapping. Its exact parameters are:
+`src.baseline_tree.train_baseline_tree()` reads the immutable
+`FROZEN_BASELINE_PARAMETERS` mapping. Its exact estimator parameters are:
 
 ```text
 criterion='gini'
@@ -68,11 +52,10 @@ ccp_alpha=0.0
 monotonic_cst=None
 ```
 
-The `max_depth` arguments used by tree plotting/text functions only truncate a
-presentation of the already-fitted tree. They do not train another estimator or
-change the baseline.
+Presentation functions use `max_depth` only to truncate an image/text view of
+the already-fitted tree. They do not train a smaller estimator.
 
-Measured results from the frozen held-out test set:
+Measured held-out results:
 
 | Result | Value |
 | --- | ---: |
@@ -86,116 +69,95 @@ Measured results from the frozen held-out test set:
 | Test Accuracy | 0.8737144753 |
 | Train-Test Gap | 0.1262855247 |
 | Tree Depth | 34 |
-| Leaf Count | 2,876 |
-| Node Count | 5,751 |
+| Leaves / Nodes | 2,876 / 5,751 |
 
-ROC-AUC is calculated from the `yes` column returned by `predict_proba`, not
-from hard predictions. The baseline is not tuned, pruned, class-weighted, or
-selected using cross-validation.
+ROC-AUC uses the probability returned by `predict_proba` for encoded class `1`.
+Reports and figures convert encoded values back to the original `no`/`yes` names.
 
 # How Future Members Should Reuse It
 
-Every future experiment must start from the same bundle:
-
 ```python
-from src.bank_data import load_shared_experiment_data
+from src.data import load_and_split_data
+from src.preprocessing import build_preprocessing_pipeline, get_encoded_feature_names
 
-data = load_shared_experiment_data()
+split = load_and_split_data(test_size=0.20, random_state=42)
+preprocessing = build_preprocessing_pipeline()
 
-X_train = data.X_train_raw
-X_test = data.X_test_raw
-y_train = data.y_train
-y_test = data.y_test
-preprocessing = data.preprocessor
-X_train_processed = data.X_train_processed
-X_test_processed = data.X_test_processed
-feature_names = data.feature_names
+X_train_processed = preprocessing.fit_transform(split.X_train)
+X_test_processed = preprocessing.transform(split.X_test)
+feature_names = get_encoded_feature_names(preprocessing)
+y_train = split.y_train
+y_test = split.y_test
 ```
 
-Hau, Kiet, and Trung should fit their separately owned estimator only on
-`X_train_processed` and `y_train`. They must evaluate final results on the
-unchanged `X_test_processed` and `y_test`, and must not call `train_test_split`,
-fit a second encoder, or fit preprocessing on the complete dataset.
+Hau, Kiet, and Trung must fit separately owned estimators on
+`X_train_processed, y_train` and evaluate on the unchanged
+`X_test_processed, y_test`. They must not create another split or encoder.
+`build_model_pipeline(estimator)` is available for fold-safe validation.
 
-They may reuse generic evaluation helpers from `src/baseline_tree.py` where the
-metric definition is intended to remain identical. They must construct their
-own model in their own module; they must not modify `train_baseline_tree()` or
-`FROZEN_BASELINE_PARAMETERS`.
-
-Khang may move, extend, or replace the provisional implementation in
-`src/bank_data.py` when completing his section. That integration must preserve
-the target definition, ordered train/test row identities, train-only fitting,
-and transformed feature-name alignment. If Khang intentionally changes the
-group's experiment contract, all experiments—including the baseline—must be
-rerun; results from different splits must not be compared.
+They may reuse generic metric helpers where definitions should remain identical,
+but must not modify Hoang's `train_baseline_tree()` or the frozen parameter map.
+If the group intentionally changes Khang's data contract, every model must be
+rerun; results from different splits or encoders must not be compared.
 
 # Ownership Boundary
 
 | Owner | Responsibility |
 | --- | --- |
-| Khang | Dataset loading, EDA, categorical encoding, preprocessing, and train/test split. The current `src/bank_data.py` is provisional shared infrastructure awaiting his ownership. |
-| Hoang | Frozen baseline tree, held-out metrics, confusion matrix, tree visualizations, feature importance, decision rules, tree analysis, and baseline report material. |
-| Hau | `max_depth`, `min_samples_split`, and `min_samples_leaf` experiments and validation. |
-| Kiet | Cost-complexity pruning using `ccp_alpha`. |
-| Trung | Class-imbalance work using `class_weight`, plus his assigned comparison/conclusion material. |
+| Khang | `src/data.py`, `src/preprocessing.py`, EDA, encoding, and the shared split |
+| Hoang | Frozen baseline, metrics, confusion matrix, tree figures, importance, rules, and baseline report |
+| Hau | `max_depth`, `min_samples_split`, `min_samples_leaf`, and validation |
+| Kiet | Cost-complexity pruning with `ccp_alpha` |
+| Trung | `class_weight`, comparison, and conclusion |
 
 # Audit Classification
 
-## A. Shared infrastructure
+## Shared infrastructure
 
-- `src/experiment_contract.py`
-- `src/bank_data.py`
-- `src/artifact_utils.py`
-- environment dependencies in `requirements.txt`
-- shared generated records under `artifacts/shared/`
-- shared-pipeline and leakage tests in `tests/test_baseline.py`
-- the shared artifact-generation portion of `run_baseline.py`
+- `src/data.py`, `src/preprocessing.py`, `src/eda.py`, `src/visualization.py`;
+- `src/experiment_contract.py` and `src/artifact_utils.py`;
+- `tests/test_khang_pipeline.py` plus shared integration assertions in
+  `tests/test_baseline.py`;
+- `artifacts/shared/`.
 
-## B. Hoang's work
+## Hoang's work
 
-- `src/baseline_tree.py`
-- the baseline training/report portion of `run_baseline.py`
-- `reports/hoang_baseline_and_tree_analysis.md`
-- all generated records under `artifacts/baseline/`
-- baseline evaluation tests in `tests/test_baseline.py`
+- `src/baseline_tree.py` and the baseline portion of `run_baseline.py`;
+- `reports/hoang_baseline_and_tree_analysis.md`;
+- `artifacts/baseline/` and baseline-specific tests.
 
-## C. Code that should not exist yet
+## Code that should not exist yet
 
-None found. There are no tuning searches, improvement estimators, pruning
-experiments, class-weight experiments, cross-validation experiments, or final
-group comparisons/conclusions in the repository.
+None. There is no tuning search, alternative estimator experiment, pruning,
+class-weight experiment, or final comparison implementation.
 
 # Files Future Members Must Not Modify
 
-- `src/experiment_contract.py`, unless the whole group deliberately restarts all
-  experiments under a new contract;
-- `src/baseline_tree.py` baseline constructor and frozen configuration;
-- `artifacts/baseline/` and
-  `reports/hoang_baseline_and_tree_analysis.md`, except by rerunning the frozen
-  baseline workflow;
-- the held-out test labels or row selection.
+- `src/experiment_contract.py` or Khang's ordered test selection unless the whole
+  group deliberately restarts every experiment;
+- Hoang's frozen baseline constructor and parameters;
+- baseline artifacts/report except by rerunning `run_baseline.py`;
+- held-out test labels or rows.
 
 # Correctness Notes
 
-The automated audit found no target leakage, overlapping train/test rows, or
-test-time fitting. The saved preprocessor and split fingerprints match a fresh
-execution. The exact verified package versions are pinned in `requirements.txt`
-and recorded with the run in `artifacts/baseline/run_manifest.json`.
+The audits verify disjoint train/test indices, target exclusion, training-only
+preprocessor fitting, feature-name alignment, and probability-based ROC-AUC.
+Compatible dependency ranges are in `requirements.txt`; exact executed versions
+are recorded in `artifacts/baseline/run_manifest.json`.
 
-The dataset's `duration` field is known only after a marketing call finishes.
-Keeping it is consistent with the selected dataset baseline, but it would not
-be available to a system making decisions before a call. This is a potential
-deployment-time information issue, not leakage between the frozen train and
-test partitions. Khang and the group should describe the intended prediction
-time clearly rather than silently dropping the feature from only some models.
+`duration` is known only after a marketing call finishes. Keeping it matches the
+selected dataset baseline, but it is unavailable for pre-call prediction. This
+is a deployment-time concern, not train/test leakage; all team models must treat
+the feature consistently.
 
-To reproduce the baseline and refresh both shared and Hoang artifacts:
+Reproduce both shared and baseline artifacts:
 
 ```bash
 .venv/bin/python run_baseline.py
 ```
 
-To verify the contract and baseline helpers:
+Run all tests:
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -v

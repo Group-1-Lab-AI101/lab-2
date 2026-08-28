@@ -14,10 +14,11 @@
     "random_state": 42,
     "splitter": "best"
   },
-  "dataset_path": "data/raw/bank-full.csv",
+  "dataset_path": "data/bank-full.csv",
   "dataset_rows": 45211,
   "dataset_sha256": "d1513ec63b385506f7cfce9f2c5caa9fe99e7ba4e8c3fa264b3aaf0f849ed32d",
   "positive_label": "yes",
+  "positive_label_encoded_value": 1,
   "random_state": 42,
   "raw_predictors": 16,
   "scope": "Hoang baseline Decision Tree and resulting-tree analysis only",

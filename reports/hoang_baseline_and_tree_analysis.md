@@ -2,9 +2,9 @@
 
 ## Baseline Configuration
 
-This section reports only Hoang's baseline Decision Tree and analysis. The source file was `data/raw/bank-full.csv` with 45,211 observations, 16 raw predictors, and the binary target `y`. The positive class is `yes`, meaning that the client subscribed to a term deposit.
+This section reports only Hoang's baseline Decision Tree and analysis. The source file was `data/bank-full.csv` with 45,211 observations, 16 raw predictors, and the binary target `y`. The positive class is `yes`, meaning that the client subscribed to a term deposit.
 
-Because Khang has not yet implemented his owned data section, the first repository member supplied the minimum shared experiment contract needed for a runnable baseline: a stratified 80%/20% train/test split with `random_state=42`, followed by one-hot encoding of categorical predictors and passthrough of numerical predictors. The encoder was fitted on the training partition only. It produced 51 correctly named transformed features. Future experiments must reuse this exact bundle rather than create another split or preprocessor. Khang may later assume ownership and extend the implementation while preserving the frozen partition contract.
+Hoang's baseline directly reuses Khang's shared data and preprocessing modules: `src.data.load_and_split_data()` performs a stratified 80%/20% train/test split with `random_state=42`, and `src.preprocessing.build_preprocessing_pipeline()` applies one-hot encoding to categorical predictors with numerical passthrough. The target is mapped as `no=0` and `yes=1`; report labels use the original class names. The encoder was fitted on the training partition only and produced 51 correctly named transformed features.
 
 The true untuned baseline was `DecisionTreeClassifier` with the following exact configuration: `criterion='gini'`, `splitter='best'`, `max_depth=None`, `min_samples_split=2`, `min_samples_leaf=1`, `min_weight_fraction_leaf=0.0`, `max_features=None`, `random_state=42`, `max_leaf_nodes=None`, `min_impurity_decrease=0.0`, `class_weight=None`, `ccp_alpha=0.0`, `monotonic_cst=None`. No hyperparameter search, pruning, class weighting, or cross-validation tuning was performed.
 
@@ -105,13 +105,13 @@ An importance value is the normalized total impurity reduction attributed to a t
 
 ## Data-Leakage Audit
 
+- Shared pipeline: `src.data + src.preprocessing`
 - Split before preprocessor fit: `True`
 - Preprocessor fit partition: `training only`
 - Test partition usage: `transform and evaluation only`
 - Target column: `y`
-- Target excluded from raw features: `True`
-- Target excluded from transformed features: `True`
 - Target excluded from raw partitions: `True`
+- Target excluded from transformed features: `True`
 - Train test indices disjoint: `True`
 - Split row count: `45211`
 - Feature name count: `51`
@@ -119,4 +119,4 @@ An importance value is the normalized total impurity reduction attributed to a t
 - Transformed test column count: `51`
 - Feature names aligned: `True`
 
-The test partition was never supplied to model or preprocessing `fit`, and the target was removed before splitting predictors. No test result was used to tune this baseline. The shared implementation remains provisional in ownership until Khang's work is merged, but the recorded split identity must be preserved so every later experiment remains directly comparable.
+The test partition was never supplied to model or preprocessing `fit`, and the target was removed before splitting predictors. No test result was used to tune this baseline. Khang's original train/test indices are fingerprinted in the shared manifest so every later experiment can verify direct comparability.

@@ -7,15 +7,19 @@ and all later experiments on the same data partition.
 
 from __future__ import annotations
 
-from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping
 
+from src.data import DEFAULT_DATA_PATH, PROJECT_ROOT, TARGET_COLUMN, TARGET_MAPPING
 
-DATASET_PATH = Path("data/raw/bank-full.csv")
-TARGET_COLUMN = "y"
-POSITIVE_CLASS = "yes"
-CLASS_LABELS = frozenset({"no", "yes"})
+
+DATASET_PATH = DEFAULT_DATA_PATH
+DATASET_DISPLAY_PATH = DEFAULT_DATA_PATH.relative_to(PROJECT_ROOT)
+POSITIVE_CLASS = TARGET_MAPPING["yes"]
+POSITIVE_CLASS_NAME = "yes"
+CLASS_DISPLAY_NAMES = tuple(
+    label for label, _ in sorted(TARGET_MAPPING.items(), key=lambda item: item[1])
+)
 
 TEST_SIZE = 0.20
 RANDOM_STATE = 42
@@ -41,4 +45,3 @@ FROZEN_BASELINE_PARAMETERS: Mapping[str, Any] = MappingProxyType(
         "monotonic_cst": None,
     }
 )
-

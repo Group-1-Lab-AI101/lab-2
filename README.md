@@ -1,68 +1,129 @@
-# Lab 2: Decision Tree Modeling and Improvement
+# Lab 2 — Decision Tree Modeling and Improvement
 
-This repository currently implements **Hoang's assigned scope only**:
+Dự án sử dụng bộ dữ liệu **Bank Marketing** để xây dựng, phân tích và cải thiện
+mô hình Decision Tree. Hiện repository đã ghép hai phần:
 
-- an untuned baseline `DecisionTreeClassifier`;
-- held-out classification metrics and confusion matrix;
-- full-structure and readable top-level tree visualizations;
-- correctly mapped feature importances;
-- tree statistics, early splits, representative rules, and report-ready analysis.
+- **Khang:** dataset, EDA, target encoding, stratified train/test split và
+  preprocessing pipeline dùng chung;
+- **Hoàng:** baseline Decision Tree cố định, đánh giá, trực quan hóa cây,
+  feature importance và phân tích cây.
 
-It does not implement depth/minimum-sample tuning, pruning, class weighting,
-improved-model comparisons, or the group conclusion.
+Chưa có code thử nghiệm cải thiện của Hậu, Kiệt hoặc Trung.
 
-## Setup
+## Phân công
 
-Create an environment and install the dependencies:
+| Thành viên | Phần phụ trách |
+| --- | --- |
+| Khang | Dataset, EDA, encoding, preprocessing và train/test split |
+| Hoàng | Frozen baseline, metrics, confusion matrix, tree visualization và tree analysis |
+| Hậu | `max_depth`, `min_samples_split`, `min_samples_leaf` và validation |
+| Kiệt | Cost-complexity pruning với `ccp_alpha` |
+| Trung | Xử lý mất cân bằng bằng `class_weight`, comparison và conclusion |
+
+## Cấu trúc chính
+
+```text
+lab-2/
+├── data/
+│   ├── bank-full.csv
+│   └── bank-names.txt
+├── docs/
+│   ├── 1-KHANG.md
+│   ├── 1-KHANG-ENG.md
+│   └── BASELINE_HANDOFF.md
+├── src/
+│   ├── data.py                 # Khang: load, validate, target mapping, split
+│   ├── preprocessing.py        # Khang: shared one-hot pipeline
+│   ├── eda.py                  # Khang: EDA report
+│   ├── visualization.py        # Khang: EDA figures
+│   ├── baseline_tree.py        # Hoàng: baseline and tree analysis
+│   └── experiment_contract.py  # frozen comparison contract
+├── tests/
+├── outputs/                    # Khang's EDA outputs
+├── artifacts/
+│   ├── shared/                 # fitted official preprocessor + split identity
+│   └── baseline/               # Hoàng's measured baseline artifacts
+├── reports/
+├── run_all.py                  # reproduce Khang's section
+└── run_baseline.py             # reproduce Hoàng's section
+```
+
+## Cài đặt
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
-Download the official [UCI Bank Marketing dataset](https://archive.ics.uci.edu/dataset/222/bank%2Bmarketing), then extract `bank-full.csv` to:
-
-```text
-data/raw/bank-full.csv
-```
-
-The verified file used for the recorded run has SHA-256:
+Dataset chính thức đã nằm tại `data/bank-full.csv`. File đã kiểm tra có SHA-256:
 
 ```text
 d1513ec63b385506f7cfce9f2c5caa9fe99e7ba4e8c3fa264b3aaf0f849ed32d
 ```
 
-## Run Hoang's part
+## Chạy phần Khang
+
+```bash
+.venv/bin/python run_all.py
+```
+
+Chỉ kiểm tra report JSON, không sinh lại hình:
+
+```bash
+.venv/bin/python run_all.py --skip-figures
+```
+
+Tài liệu: [tiếng Việt](docs/1-KHANG.md) và
+[tiếng Anh](docs/1-KHANG-ENG.md).
+
+## Chạy phần Hoàng
 
 ```bash
 .venv/bin/python run_baseline.py
 ```
 
-Optional paths and reproducibility settings are available through:
+Kết quả mặc định được ghi vào `artifacts/baseline/`; report-ready Markdown nằm
+tại `reports/hoang_baseline_and_tree_analysis.md`. Hợp đồng ghép và ranh giới
+ownership nằm trong [docs/BASELINE_HANDOFF.md](docs/BASELINE_HANDOFF.md).
 
-```bash
-.venv/bin/python run_baseline.py --help
+Baseline là `DecisionTreeClassifier` không tune, giữ nguyên mặc định và chỉ cố
+định `random_state=42`. Split và pipeline được lấy trực tiếp từ code của Khang.
+
+## Pipeline chung cho các thành viên tiếp theo
+
+Không tạo `train_test_split` hoặc encoder riêng. Dùng trực tiếp:
+
+```python
+from src.data import load_and_split_data
+from src.preprocessing import build_preprocessing_pipeline, get_encoded_feature_names
+
+split = load_and_split_data(test_size=0.20, random_state=42)
+preprocessing = build_preprocessing_pipeline()
+
+X_train_processed = preprocessing.fit_transform(split.X_train)
+X_test_processed = preprocessing.transform(split.X_test)
+feature_names = get_encoded_feature_names(preprocessing)
+
+y_train = split.y_train
+y_test = split.y_test
 ```
 
-The default artifacts are written to `artifacts/baseline/`, and the report-ready
-Markdown is written to `reports/hoang_baseline_and_tree_analysis.md`.
+Target được Khang ánh xạ `no → 0`, `yes → 1`. Encoder chỉ được fit trên
+`X_train`; test set chỉ được transform và đánh giá. Có thể dùng
+`build_model_pipeline(estimator)` khi validation/cross-validation cần đảm bảo
+preprocessing được fit riêng trong từng training fold.
 
-The split ratio and `random_state` are intentionally not CLI options. They are
-frozen in `src/experiment_contract.py` so every team member uses the identical
-test partition. See `docs/BASELINE_HANDOFF.md` for the shared experiment contract
-and ownership boundaries.
-
-Run the focused tests with:
+## Kiểm thử
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-## Integration note
+Hợp đồng so sánh cố định:
 
-The repository did not contain Khang's shared loading, split, or preprocessing
-code when this baseline was implemented. `src/bank_data.py` is therefore the
-current shared entry point, using the frozen stratified 80/20 split and
-train-only-fitted one-hot encoding. Future experiments must call
-`load_shared_experiment_data()` instead of creating another split or encoder.
-Khang may later extend this implementation while preserving the contract.
+- dataset: `data/bank-full.csv`;
+- target: `y`, positive class `yes` (`1`);
+- stratified split: 80/20;
+- `random_state=42`;
+- 36,168 training rows, 9,043 test rows;
+- 51 transformed features.

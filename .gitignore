@@ -3,8 +3,8 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
+.ipynb_checkpoints/
 .DS_Store
 
-# The raw dataset is downloaded from UCI; keep generated copies out of Git.
+# Legacy local download location; the team dataset is tracked at data/bank-full.csv.
 data/raw/
-

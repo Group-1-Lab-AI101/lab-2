@@ -1,1 +1,1 @@
-"""Shared experiment infrastructure and Hoang's baseline Decision Tree package."""
+"""Shared data infrastructure and team experiments for the Decision Tree lab."""

@@ -28,9 +28,25 @@ from sklearn.tree import DecisionTreeClassifier, export_graphviz, export_text, p
 from src.experiment_contract import FROZEN_BASELINE_PARAMETERS
 
 
+def _class_names(
+    model: DecisionTreeClassifier,
+    display_names: Sequence[str] | None,
+) -> list[str]:
+    """Resolve human-readable names in the estimator's class order."""
+
+    names = (
+        [str(label) for label in model.classes_]
+        if display_names is None
+        else [str(name) for name in display_names]
+    )
+    if len(names) != len(model.classes_):
+        raise ValueError("Class display names do not align with model classes.")
+    return names
+
+
 def train_baseline_tree(
     X_train: np.ndarray,
-    y_train: Sequence[str],
+    y_train: Sequence[Any],
 ) -> DecisionTreeClassifier:
     """Fit the explicit, frozen, untuned baseline configuration."""
 
@@ -57,11 +73,13 @@ def baseline_configuration(model: DecisionTreeClassifier) -> dict[str, Any]:
 def evaluate_classifier(
     model: DecisionTreeClassifier,
     X_train: np.ndarray,
-    y_train: Sequence[str],
+    y_train: Sequence[Any],
     X_test: np.ndarray,
-    y_test: Sequence[str],
+    y_test: Sequence[Any],
     *,
-    positive_label: str,
+    positive_label: Any,
+    positive_class_name: str | None = None,
+    class_display_names: Sequence[str] | None = None,
 ) -> tuple[dict[str, Any], pd.DataFrame, np.ndarray]:
     """Evaluate the held-out test predictions and positive-class probabilities."""
 
@@ -72,6 +90,7 @@ def evaluate_classifier(
         raise ValueError(f"Positive label {positive_label!r} not in {class_labels}.")
     positive_index = class_labels.index(positive_label)
     positive_scores = model.predict_proba(X_test)[:, positive_index]
+    display_names = _class_names(model, class_display_names)
 
     train_accuracy = accuracy_score(y_train, y_train_pred)
     test_accuracy = accuracy_score(y_test, y_test_pred)
@@ -80,6 +99,7 @@ def evaluate_classifier(
         y_test,
         y_test_pred,
         labels=class_labels,
+        target_names=display_names,
         output_dict=True,
         zero_division=0,
     )
@@ -100,8 +120,9 @@ def evaluate_classifier(
         "train_accuracy": float(train_accuracy),
         "test_accuracy": float(test_accuracy),
         "train_test_accuracy_gap": float(train_accuracy - test_accuracy),
-        "positive_class": positive_label,
-        "class_labels": [str(label) for label in class_labels],
+        "positive_class": positive_class_name or str(positive_label),
+        "positive_class_encoded_value": positive_label,
+        "class_labels": display_names,
         "zero_division_policy": 0,
         "confusion_matrix": matrix.tolist(),
     }
@@ -109,16 +130,25 @@ def evaluate_classifier(
 
 
 def plot_confusion_matrix(
-    y_test: Sequence[str],
-    y_pred: Sequence[str],
-    class_labels: Sequence[str],
+    y_test: Sequence[Any],
+    y_pred: Sequence[Any],
+    class_values: Sequence[Any],
     output_path: str | Path,
+    *,
+    class_display_names: Sequence[str] | None = None,
 ) -> None:
     """Save a report-ready confusion matrix with correct axis semantics."""
 
-    matrix = confusion_matrix(y_test, y_pred, labels=class_labels)
+    matrix = confusion_matrix(y_test, y_pred, labels=class_values)
+    display_names = (
+        [str(label) for label in class_values]
+        if class_display_names is None
+        else list(class_display_names)
+    )
+    if len(display_names) != len(class_values):
+        raise ValueError("Class display names do not align with class values.")
     figure, axis = plt.subplots(figsize=(7.2, 6.2))
-    display = ConfusionMatrixDisplay(matrix, display_labels=class_labels)
+    display = ConfusionMatrixDisplay(matrix, display_labels=display_names)
     display.plot(ax=axis, cmap="Blues", colorbar=False, values_format="d")
     axis.set_title("Baseline Decision Tree - Confusion Matrix", pad=14)
     axis.set_xlabel("Predicted label")
@@ -134,6 +164,7 @@ def plot_tree_top_levels(
     output_path: str | Path,
     *,
     max_depth: int = 3,
+    class_display_names: Sequence[str] | None = None,
 ) -> None:
     """Plot early levels of the already-fitted tree; this does not retrain it."""
 
@@ -141,7 +172,7 @@ def plot_tree_top_levels(
     plot_tree(
         model,
         feature_names=list(feature_names),
-        class_names=[str(label) for label in model.classes_],
+        class_names=_class_names(model, class_display_names),
         filled=True,
         rounded=True,
         proportion=True,
@@ -159,6 +190,8 @@ def plot_tree_top_levels(
 def plot_full_tree_structure(
     model: DecisionTreeClassifier,
     output_path: str | Path,
+    *,
+    class_display_names: Sequence[str] | None = None,
 ) -> None:
     """Plot every node as a scalable structural overview without unreadable labels."""
 
@@ -208,7 +241,7 @@ def plot_full_tree_structure(
         linewidths=0,
     )
     handles, _ = scatter.legend_elements()
-    axis.legend(handles, [str(label) for label in model.classes_], title="Predicted class")
+    axis.legend(handles, _class_names(model, class_display_names), title="Predicted class")
     axis.set_title(
         f"Baseline Decision Tree - Full Structure ({tree.node_count:,} nodes, "
         f"{model.get_n_leaves():,} leaves)"
@@ -228,6 +261,8 @@ def export_full_tree_dot(
     model: DecisionTreeClassifier,
     feature_names: Sequence[str],
     output_path: str | Path,
+    *,
+    class_display_names: Sequence[str] | None = None,
 ) -> None:
     """Export the full labeled tree in Graphviz DOT format for detailed inspection."""
 
@@ -235,7 +270,7 @@ def export_full_tree_dot(
         model,
         out_file=str(output_path),
         feature_names=list(feature_names),
-        class_names=[str(label) for label in model.classes_],
+        class_names=_class_names(model, class_display_names),
         filled=True,
         rounded=True,
         special_characters=False,
@@ -346,11 +381,13 @@ def extract_early_splits(
     feature_names: Sequence[str],
     *,
     max_depth: int = 2,
+    class_display_names: Sequence[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Return interpretable metadata for all internal nodes through ``max_depth``."""
 
     tree = model.tree_
     splits: list[dict[str, Any]] = []
+    display_names = _class_names(model, class_display_names)
 
     def walk(node_id: int, depth: int, branch_path: str) -> None:
         left = tree.children_left[node_id]
@@ -369,7 +406,7 @@ def extract_early_splits(
                 "left_condition": _condition(feature, threshold, True),
                 "right_condition": _condition(feature, threshold, False),
                 "training_samples": int(tree.n_node_samples[node_id]),
-                "predicted_class": str(model.classes_[predicted_index]),
+                "predicted_class": display_names[predicted_index],
             }
         )
         walk(left, depth + 1, f"{branch_path}L")
@@ -385,11 +422,13 @@ def extract_representative_rules(
     *,
     max_rules_per_class: int = 2,
     preferred_max_depth: int = 10,
+    class_display_names: Sequence[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Select high-support, reasonably short leaf paths for each predicted class."""
 
     tree = model.tree_
     candidates: list[dict[str, Any]] = []
+    display_names = _class_names(model, class_display_names)
 
     def walk(node_id: int, conditions: list[str]) -> None:
         left = tree.children_left[node_id]
@@ -399,7 +438,7 @@ def extract_representative_rules(
             predicted_index = int(np.argmax(counts))
             candidates.append(
                 {
-                    "predicted_class": str(model.classes_[predicted_index]),
+                    "predicted_class": display_names[predicted_index],
                     "sample_count": int(tree.n_node_samples[node_id]),
                     "weighted_sample_count": float(tree.weighted_n_node_samples[node_id]),
                     "purity": float(counts[predicted_index] / counts.sum()),
@@ -415,11 +454,11 @@ def extract_representative_rules(
 
     walk(0, [])
     selected: list[dict[str, Any]] = []
-    for class_label in model.classes_:
+    for class_label in display_names:
         class_candidates = [
             candidate
             for candidate in candidates
-            if candidate["predicted_class"] == str(class_label)
+            if candidate["predicted_class"] == class_label
         ]
         short = [
             candidate
