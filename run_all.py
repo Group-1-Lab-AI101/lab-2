@@ -1,4 +1,4 @@
-"""Reproduce Khang's EDA, stratified split, and categorical encoding report."""
+"""Run the unified Khang EDA and Hoang baseline project workflows."""
 
 from __future__ import annotations
 
@@ -6,6 +6,13 @@ import argparse
 from pathlib import Path
 from typing import Any
 
+from src.baseline_workflow import (
+    DEFAULT_REPORT as DEFAULT_BASELINE_REPORT,
+    DEFAULT_RESULTS_OUTPUT,
+    DEFAULT_SHARED_OUTPUT,
+    DEFAULT_TREES_OUTPUT,
+    run_baseline_workflow,
+)
 from src.data import (
     DEFAULT_DATA_PATH,
     load_bank_data,
@@ -13,6 +20,7 @@ from src.data import (
     split_features_target,
 )
 from src.eda import build_eda_report, build_split_report
+from src.experiment_contract import DATASET_PATH, RANDOM_STATE, TEST_SIZE
 from src.preprocessing import build_preprocessing_pipeline, get_encoded_feature_names
 from src.utils import to_pretty_json
 from src.visualization import DEFAULT_FIGURES_DIR, generate_eda_figures
@@ -117,11 +125,11 @@ def build_figures(
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse command-line options for the reproducible Khang report.
+    """Parse options for the single end-to-end project workflow.
 
     Returns:
-        An argparse namespace containing the dataset path, split configuration,
-        figure output directory, and optional figure-suppression flag.
+        An argparse namespace containing figure options and the unified output
+        and report destinations.
 
     Raises:
         SystemExit: If command-line arguments are invalid or help was requested.
@@ -129,27 +137,9 @@ def parse_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Print the reproducible report for EDA, stratified train/test split, "
-            "and categorical encoding."
+            "Reproduce Khang's EDA/preprocessing and Hoang's frozen baseline "
+            "from one entry point."
         )
-    )
-    parser.add_argument(
-        "--data",
-        type=Path,
-        default=DEFAULT_DATA_PATH,
-        help=f"Path to the semicolon-delimited CSV (default: {DEFAULT_DATA_PATH})",
-    )
-    parser.add_argument(
-        "--test-size",
-        type=float,
-        default=0.20,
-        help="Fraction reserved for testing (default: 0.20)",
-    )
-    parser.add_argument(
-        "--random-state",
-        type=int,
-        default=42,
-        help="Seed used by the stratified split (default: 42)",
     )
     parser.add_argument(
         "--figures-dir",
@@ -162,36 +152,75 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print the JSON report without generating EDA figures",
     )
+    parser.add_argument(
+        "--results-dir",
+        type=Path,
+        default=DEFAULT_RESULTS_OUTPUT,
+        help=f"Directory for metrics and audits (default: {DEFAULT_RESULTS_OUTPUT})",
+    )
+    parser.add_argument(
+        "--trees-dir",
+        type=Path,
+        default=DEFAULT_TREES_OUTPUT,
+        help=f"Directory for models and tree exports (default: {DEFAULT_TREES_OUTPUT})",
+    )
+    parser.add_argument(
+        "--baseline-report",
+        type=Path,
+        default=DEFAULT_BASELINE_REPORT,
+        help=f"Baseline Markdown report (default: {DEFAULT_BASELINE_REPORT})",
+    )
+    parser.add_argument(
+        "--shared-output-dir",
+        type=Path,
+        default=DEFAULT_SHARED_OUTPUT,
+        help=f"Directory for shared fitted outputs (default: {DEFAULT_SHARED_OUTPUT})",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
-    """Execute the command-line report workflow and print formatted JSON.
+    """Execute the single project workflow and print one combined JSON summary.
 
-    The function reads arguments from ``sys.argv``, validates and processes the
-    dataset, generates four EDA figures unless disabled, and writes the report to
-    standard output. Exceptions propagate so failures return a non-zero exit
-    status.
+    The workflow first regenerates Khang's EDA and figures, then trains and
+    documents Hoang's frozen baseline using the same split and preprocessing
+    contract. Exceptions propagate so failures return a non-zero exit status.
 
     Returns:
         None.
     """
 
     args = parse_args()
-    report = build_report(
-        args.data,
-        test_size=args.test_size,
-        random_state=args.random_state,
+    khang_report = build_report(
+        DATASET_PATH,
+        test_size=TEST_SIZE,
+        random_state=RANDOM_STATE,
     )
     if not args.skip_figures:
         figure_paths = build_figures(
-            args.data,
-            test_size=args.test_size,
-            random_state=args.random_state,
+            DATASET_PATH,
+            test_size=TEST_SIZE,
+            random_state=RANDOM_STATE,
             output_dir=args.figures_dir,
         )
-        report["figures"] = [str(path) for path in figure_paths]
-    print(to_pretty_json(report))
+        khang_report["figures"] = [str(path) for path in figure_paths]
+
+    baseline_report = run_baseline_workflow(
+        figures_dir=args.figures_dir,
+        results_dir=args.results_dir,
+        trees_dir=args.trees_dir,
+        report_path=args.baseline_report,
+        shared_output_dir=args.shared_output_dir,
+    )
+
+    print(
+        to_pretty_json(
+            {
+                "khang": khang_report,
+                "baseline": baseline_report,
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

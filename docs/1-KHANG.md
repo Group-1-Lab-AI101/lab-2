@@ -10,9 +10,9 @@ Phần này thực hiện bốn nhiệm vụ:
 4. chia train/test bằng stratified sampling, sau đó đóng gói tiền xử lý thành
    pipeline dùng chung cho cả nhóm.
 
-Mọi số liệu trong tài liệu này được sinh trực tiếp bởi `python run_all.py`. Mã
-nguồn tương ứng nằm trong `src/data.py`, `src/eda.py`, `src/preprocessing.py` và
-`src/visualization.py`.
+Mọi số liệu trong tài liệu này được sinh trực tiếp trong workflow duy nhất bằng
+`python run_all.py`. Mã nguồn tương ứng nằm trong `src/data.py`, `src/eda.py`,
+`src/preprocessing.py` và `src/visualization.py`.
 
 ## 2. Dataset Description
 
@@ -224,10 +224,10 @@ Sau khi cài dependency theo README, chạy tại thư mục gốc:
 python run_all.py
 ```
 
-Lệnh in toàn bộ EDA, phân bố lớp của train/test, kích thước ma trận sau encoding
-và danh sách tên đặc trưng dưới dạng JSON. Đồng thời, script tái tạo bốn hình PNG
-trong `outputs/figures/`. Các biểu đồ chỉ trực quan hóa thống kê EDA; script
-không huấn luyện mô hình hoặc tạo kết quả thuộc phần của thành viên khác.
+Workflow in toàn bộ EDA, phân bố lớp của train/test, kích thước ma trận sau
+encoding và danh sách tên đặc trưng dưới dạng JSON. Đồng thời, nó tái tạo bốn
+hình PNG trong `outputs/figures/`, sau đó chạy baseline trên cùng split và
+pipeline. Các biểu đồ EDA chỉ trực quan hóa thống kê thuộc phần Khang.
 
 Có thể chọn thư mục hình khác hoặc bỏ qua bước sinh hình:
 

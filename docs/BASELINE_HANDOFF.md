@@ -25,7 +25,7 @@ retrieved with `src.preprocessing.get_encoded_feature_names()`.
 
 The frozen constants used by Hoang are in `src/experiment_contract.py`. The
 baseline CLI cannot change the dataset, split ratio, or seed. Generated shared
-records are stored in `artifacts/shared/`:
+records are stored in `outputs/shared/`:
 
 - `preprocessor.joblib`: Khang's fitted preprocessing pipeline;
 - `split_indices.npz`: original ordered train/test row indices;
@@ -118,13 +118,16 @@ rerun; results from different splits or encoders must not be compared.
 - `src/experiment_contract.py` and `src/artifact_utils.py`;
 - `tests/test_khang_pipeline.py` plus shared integration assertions in
   `tests/test_baseline.py`;
-- `artifacts/shared/`.
+- `outputs/shared/`.
 
 ## Hoang's work
 
-- `src/baseline_tree.py` and the baseline portion of `run_baseline.py`;
-- `reports/hoang_baseline_and_tree_analysis.md`;
-- `artifacts/baseline/` and baseline-specific tests.
+- `src/baseline_tree.py`, `src/baseline_workflow.py`, and the baseline workflow
+  exposed by `run_all.py`;
+- `docs/hoang_baseline_and_tree_analysis.md`;
+- baseline PNGs in `outputs/figures/`, measured tables/manifests in
+  `outputs/results/`, tree/model exports in `outputs/trees/`, and
+  baseline-specific tests.
 
 ## Code that should not exist yet
 
@@ -136,7 +139,7 @@ class-weight experiment, or final comparison implementation.
 - `src/experiment_contract.py` or Khang's ordered test selection unless the whole
   group deliberately restarts every experiment;
 - Hoang's frozen baseline constructor and parameters;
-- baseline artifacts/report except by rerunning `run_baseline.py`;
+- baseline outputs/report except by rerunning `run_all.py`;
 - held-out test labels or rows.
 
 # Correctness Notes
@@ -144,17 +147,17 @@ class-weight experiment, or final comparison implementation.
 The audits verify disjoint train/test indices, target exclusion, training-only
 preprocessor fitting, feature-name alignment, and probability-based ROC-AUC.
 Compatible dependency ranges are in `requirements.txt`; exact executed versions
-are recorded in `artifacts/baseline/run_manifest.json`.
+are recorded in `outputs/results/run_manifest.json`.
 
 `duration` is known only after a marketing call finishes. Keeping it matches the
 selected dataset baseline, but it is unavailable for pre-call prediction. This
 is a deployment-time concern, not train/test leakage; all team models must treat
 the feature consistently.
 
-Reproduce both shared and baseline artifacts:
+Reproduce both shared and baseline outputs:
 
 ```bash
-.venv/bin/python run_baseline.py
+.venv/bin/python run_all.py
 ```
 
 Run all tests:

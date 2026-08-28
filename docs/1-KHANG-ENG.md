@@ -11,9 +11,9 @@ This part completes four tasks:
 4. create a stratified train/test split and package preprocessing as a shared
    pipeline for the whole team.
 
-Every statistic in this document is generated directly by `python run_all.py`.
-The corresponding implementation is in `src/data.py`, `src/eda.py`,
-`src/preprocessing.py`, and `src/visualization.py`.
+Every statistic in this document is generated within the single workflow by
+`python run_all.py`. The corresponding implementation is in `src/data.py`,
+`src/eda.py`, `src/preprocessing.py`, and `src/visualization.py`.
 
 ## 2. Dataset Description
 
@@ -229,11 +229,10 @@ from the project root:
 python run_all.py
 ```
 
-The command prints the complete EDA, train/test class distributions, encoded
+The workflow prints the complete EDA, train/test class distributions, encoded
 matrix dimensions, and ordered feature names as JSON. It also recreates four PNG
-figures in `outputs/figures/`. These plots visualize only Khang's EDA statistics;
-the script does not train a model or generate results assigned to another team
-member.
+figures in `outputs/figures/`, then runs the baseline on the same split and
+pipeline. The EDA plots visualize only statistics assigned to Khang.
 
 To use a different figure directory or skip figure generation:
 

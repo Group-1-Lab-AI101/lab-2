@@ -28,7 +28,7 @@ Accuracy is the overall fraction classified correctly. Precision measures how of
 
 ## Confusion Matrix
 
-![Baseline confusion matrix](../artifacts/baseline/confusion_matrix.png)
+![Baseline confusion matrix](../outputs/figures/confusion_matrix.png)
 
 The class order is `no`, `yes`. Therefore, the matrix is `[[7403, 582], [560, 498]]`: 7403 true negatives, 582 false positives, 560 false negatives, and 498 true positives. The horizontal axis is the predicted label and the vertical axis is the true label.
 
@@ -38,11 +38,11 @@ The class order is `no`, `yes`. Therefore, the matrix is `[[7403, 582], [560, 49
 
 The fitted baseline has depth **34**, **5,751 nodes**, and **2,876 leaves**. Its training accuracy is 1.000000, versus 0.873714 on the test set, a gap of 0.126286. The baseline shows strong evidence of overfitting: the unrestricted tree fits the training observations perfectly but generalizes substantially less accurately. This diagnosis describes the measured baseline and is not the result of tuning.
 
-![Full baseline tree structure](../artifacts/baseline/baseline_tree_full_structure.png)
+![Full baseline tree structure](../outputs/figures/baseline_tree_full_structure.png)
 
 The full structural view contains every node, with colour indicating the node's predicted class. Labels are intentionally omitted at this scale. The following unchanged-model view displays the first levels with readable node labels; it is a presentation truncation, not a smaller retrained tree.
 
-![Baseline tree top levels](../artifacts/baseline/baseline_tree_top_levels.png)
+![Baseline tree top levels](../outputs/figures/baseline_tree_top_levels.png)
 
 ## Important Splits and Decision Rules
 
@@ -67,7 +67,7 @@ Representative fitted leaf rules were selected programmatically for high support
 3. IF duration > 521.500 AND duration <= 827.500 AND poutcome is 'success' AND housing is 'no' AND day <= 30.500 AND job is not 'entrepreneur' AND day > 1.500 AND education is not 'unknown', THEN predict **yes** (training support = 55, purity = 1.000, path depth = 8).
 4. IF duration > 521.500 AND duration > 827.500 AND contact is 'cellular' AND age <= 54.500 AND poutcome is 'success' AND day > 8.000, THEN predict **yes** (training support = 24, purity = 1.000, path depth = 6).
 
-These rules describe associations learned by this fitted tree. They should not be interpreted as causal effects. The exact early-level tree text is saved in `../artifacts/baseline/early_tree.txt`, and the complete labeled tree is available in `../artifacts/baseline/baseline_tree_full.dot`.
+These rules describe associations learned by this fitted tree. They should not be interpreted as causal effects. The exact early-level tree text is saved in `../outputs/trees/early_tree.txt`, and the complete labeled tree is available in `../outputs/trees/baseline_tree_full.dot`.
 
 ## Feature Importance
 
@@ -86,7 +86,7 @@ The tree's impurity-based `feature_importances_` values were mapped one-to-one t
 | 9 | `month_mar` | 0.014057 |
 | 10 | `month_jun` | 0.013801 |
 
-![Top feature importances](../artifacts/baseline/top_feature_importance.png)
+![Top feature importances](../outputs/figures/top_feature_importance.png)
 
 An importance value is the normalized total impurity reduction attributed to a transformed feature. It indicates how much the fitted tree used that feature, but it does not establish causality and may favour variables offering many possible split points.
 

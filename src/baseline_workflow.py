@@ -1,10 +1,7 @@
-#!/usr/bin/env python3
-"""Run only Hoang's baseline Decision Tree and tree-analysis workflow."""
+"""Orchestrate Hoang's baseline workflow for the unified project runner."""
 
 from __future__ import annotations
 
-import argparse
-import json
 import os
 import platform
 import tempfile
@@ -38,7 +35,7 @@ from src.baseline_tree import (
     train_baseline_tree,
     write_representative_rules,
 )
-from src.data import load_and_split_data
+from src.data import PROJECT_ROOT, load_and_split_data
 from src.experiment_contract import (
     CLASS_DISPLAY_NAMES,
     DATASET_DISPLAY_PATH,
@@ -53,19 +50,11 @@ from src.experiment_contract import (
 from src.preprocessing import build_preprocessing_pipeline, get_encoded_feature_names
 
 
-DEFAULT_OUTPUT = Path("artifacts/baseline")
-DEFAULT_REPORT = Path("reports/hoang_baseline_and_tree_analysis.md")
-DEFAULT_SHARED_OUTPUT = Path("artifacts/shared")
-
-
-def parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Train and analyze the untuned baseline Decision Tree only."
-    )
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
-    parser.add_argument("--shared-output-dir", type=Path, default=DEFAULT_SHARED_OUTPUT)
-    return parser.parse_args()
+DEFAULT_FIGURES_OUTPUT = PROJECT_ROOT / "outputs" / "figures"
+DEFAULT_RESULTS_OUTPUT = PROJECT_ROOT / "outputs" / "results"
+DEFAULT_TREES_OUTPUT = PROJECT_ROOT / "outputs" / "trees"
+DEFAULT_REPORT = PROJECT_ROOT / "docs" / "hoang_baseline_and_tree_analysis.md"
+DEFAULT_SHARED_OUTPUT = PROJECT_ROOT / "outputs" / "shared"
 
 
 def build_preprocessing_audit(
@@ -74,7 +63,18 @@ def build_preprocessing_audit(
     X_test_processed: Any,
     feature_names: np.ndarray,
 ) -> dict[str, Any]:
-    """Record leakage and alignment checks around Khang's fitted pipeline."""
+    """Record leakage-prevention and feature-alignment checks.
+
+    Args:
+        split: Shared train/test partition containing raw predictors and targets.
+        X_train_processed: Training matrix produced by the fitted preprocessor.
+        X_test_processed: Test matrix transformed without refitting.
+        feature_names: Ordered names corresponding to transformed matrix columns.
+
+    Returns:
+        A JSON-compatible audit dictionary covering target exclusion, disjoint
+        indices, fit scope, row counts, and transformed-feature alignment.
+    """
 
     train_indices = split.X_train.index.to_numpy(dtype=np.int64, copy=True)
     test_indices = split.X_test.index.to_numpy(dtype=np.int64, copy=True)
@@ -104,10 +104,11 @@ def build_preprocessing_audit(
     }
 
 
-def render_report(
+def render_baseline_report(
     *,
     report_path: Path,
-    output_dir: Path,
+    figures_dir: Path,
+    trees_dir: Path,
     dataset_path: Path,
     row_count: int,
     raw_feature_count: int,
@@ -122,9 +123,39 @@ def render_report(
     rules: list[dict[str, Any]],
     leakage_audit: dict[str, Any],
 ) -> None:
-    """Generate report-ready academic English using only measured values."""
+    """Render the measured baseline results as report-ready Markdown.
 
-    relative_artifacts = Path("..") / output_dir
+    Args:
+        report_path: Destination Markdown path under the unified ``docs`` tree.
+        figures_dir: Directory containing baseline PNG visualizations.
+        trees_dir: Directory containing the fitted model and tree exports.
+        dataset_path: Display path of the source dataset.
+        row_count: Total number of observations in train and test.
+        raw_feature_count: Number of predictor columns before preprocessing.
+        transformed_feature_count: Number of encoded output features.
+        test_size: Held-out fraction used by the frozen experiment contract.
+        random_state: Seed used for the shared stratified split.
+        configuration: Exact fitted Decision Tree constructor parameters.
+        metrics: Measured train/test classification metrics.
+        statistics: Measured tree depth, size, and early-split information.
+        importance: Ranked transformed-feature importance table.
+        early_splits: Structured description of the first tree levels.
+        rules: Representative fitted leaf rules selected programmatically.
+        leakage_audit: Recorded preprocessing and partition safety checks.
+
+    Returns:
+        None. The function writes UTF-8 Markdown to ``report_path``.
+
+    Raises:
+        OSError: If the report directory or file cannot be written.
+    """
+
+    relative_figures = Path(
+        os.path.relpath(figures_dir.resolve(), start=report_path.parent.resolve())
+    )
+    relative_trees = Path(
+        os.path.relpath(trees_dir.resolve(), start=report_path.parent.resolve())
+    )
     matrix = metrics["confusion_matrix"]
     top_features = importance.head(10)
     config_text = ", ".join(f"`{key}={value!r}`" for key, value in configuration.items())
@@ -188,7 +219,7 @@ Accuracy is the overall fraction classified correctly. Precision measures how of
 
 ## Confusion Matrix
 
-![Baseline confusion matrix]({relative_artifacts / 'confusion_matrix.png'})
+![Baseline confusion matrix]({relative_figures / 'confusion_matrix.png'})
 
 The class order is `{metrics['class_labels'][0]}`, `{metrics['class_labels'][1]}`. Therefore, the matrix is `[[{matrix[0][0]}, {matrix[0][1]}], [{matrix[1][0]}, {matrix[1][1]}]]`: {matrix[0][0]} true negatives, {matrix[0][1]} false positives, {matrix[1][0]} false negatives, and {matrix[1][1]} true positives. The horizontal axis is the predicted label and the vertical axis is the true label.
 
@@ -198,11 +229,11 @@ The class order is `{metrics['class_labels'][0]}`, `{metrics['class_labels'][1]}
 
 The fitted baseline has depth **{statistics['depth']}**, **{statistics['nodes']:,} nodes**, and **{statistics['leaves']:,} leaves**. Its training accuracy is {metrics['train_accuracy']:.6f}, versus {metrics['test_accuracy']:.6f} on the test set, a gap of {metrics['train_test_accuracy_gap']:.6f}. {overfit_statement}: the unrestricted tree fits the training observations{' perfectly' if metrics['train_accuracy'] == 1.0 else ' very closely'} but generalizes substantially less accurately. This diagnosis describes the measured baseline and is not the result of tuning.
 
-![Full baseline tree structure]({relative_artifacts / 'baseline_tree_full_structure.png'})
+![Full baseline tree structure]({relative_figures / 'baseline_tree_full_structure.png'})
 
 The full structural view contains every node, with colour indicating the node's predicted class. Labels are intentionally omitted at this scale. The following unchanged-model view displays the first levels with readable node labels; it is a presentation truncation, not a smaller retrained tree.
 
-![Baseline tree top levels]({relative_artifacts / 'baseline_tree_top_levels.png'})
+![Baseline tree top levels]({relative_figures / 'baseline_tree_top_levels.png'})
 
 ## Important Splits and Decision Rules
 
@@ -218,7 +249,7 @@ Representative fitted leaf rules were selected programmatically for high support
 
 {chr(10).join(rule_sections)}
 
-These rules describe associations learned by this fitted tree. They should not be interpreted as causal effects. The exact early-level tree text is saved in `{relative_artifacts / 'early_tree.txt'}`, and the complete labeled tree is available in `{relative_artifacts / 'baseline_tree_full.dot'}`.
+These rules describe associations learned by this fitted tree. They should not be interpreted as causal effects. The exact early-level tree text is saved in `{relative_trees / 'early_tree.txt'}`, and the complete labeled tree is available in `{relative_trees / 'baseline_tree_full.dot'}`.
 
 ## Feature Importance
 
@@ -228,7 +259,7 @@ The tree's impurity-based `feature_importances_` values were mapped one-to-one t
 | ---: | --- | ---: |
 {feature_rows}
 
-![Top feature importances]({relative_artifacts / 'top_feature_importance.png'})
+![Top feature importances]({relative_figures / 'top_feature_importance.png'})
 
 An importance value is the normalized total impurity reduction attributed to a transformed feature. It indicates how much the fitted tree used that feature, but it does not establish causality and may favour variables offering many possible split points.
 
@@ -255,10 +286,47 @@ The test partition was never supplied to model or preprocessing `fit`, and the t
     report_path.write_text(report, encoding="utf-8")
 
 
-def main() -> None:
-    args = parse_arguments()
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    args.shared_output_dir.mkdir(parents=True, exist_ok=True)
+def run_baseline_workflow(
+    *,
+    figures_dir: str | Path = DEFAULT_FIGURES_OUTPUT,
+    results_dir: str | Path = DEFAULT_RESULTS_OUTPUT,
+    trees_dir: str | Path = DEFAULT_TREES_OUTPUT,
+    report_path: str | Path = DEFAULT_REPORT,
+    shared_output_dir: str | Path = DEFAULT_SHARED_OUTPUT,
+) -> dict[str, Any]:
+    """Train, evaluate, document, and persist the frozen baseline tree.
+
+    Args:
+        figures_dir: Unified directory for confusion matrix, feature importance,
+            and baseline tree PNG visualizations.
+        results_dir: Unified directory for metrics, tabular reports, audits, and
+            reproducibility metadata.
+        trees_dir: Unified directory for the fitted model, DOT, rules, structural
+            statistics, and textual tree exports.
+        report_path: Markdown destination for Hoang's baseline analysis.
+        shared_output_dir: Unified output directory for the fitted preprocessor,
+            exact train/test indices, and shared split manifest.
+
+    Returns:
+        A compact JSON-compatible summary containing measured metrics, tree
+        statistics, the top ten transformed features, and all output locations.
+
+    Raises:
+        RuntimeError: If preprocessing leakage or feature-alignment checks fail.
+        OSError: If any output, report, plot, or serialized artifact cannot be
+            written.
+        ValueError: If the shared dataset or frozen experiment contract is invalid.
+    """
+
+    resolved_figures = Path(figures_dir).expanduser().resolve()
+    resolved_results = Path(results_dir).expanduser().resolve()
+    resolved_trees = Path(trees_dir).expanduser().resolve()
+    resolved_report = Path(report_path).expanduser().resolve()
+    resolved_shared_output = Path(shared_output_dir).expanduser().resolve()
+    resolved_figures.mkdir(parents=True, exist_ok=True)
+    resolved_results.mkdir(parents=True, exist_ok=True)
+    resolved_trees.mkdir(parents=True, exist_ok=True)
+    resolved_shared_output.mkdir(parents=True, exist_ok=True)
 
     split = load_and_split_data(
         DATASET_PATH,
@@ -314,52 +382,57 @@ def main() -> None:
         model, feature_names, class_display_names=CLASS_DISPLAY_NAMES
     )
 
-    save_json(metrics, args.output_dir / "baseline_metrics.json")
+    save_json(metrics, resolved_results / "baseline_metrics.json")
     pd.DataFrame(
         [(key, value) for key, value in metrics.items() if isinstance(value, (int, float, str))],
         columns=["Metric", "Result"],
-    ).to_csv(args.output_dir / "baseline_metrics.csv", index=False)
-    classification_report_frame.to_csv(args.output_dir / "classification_report.csv")
-    importance.to_csv(args.output_dir / "feature_importance.csv", index=False)
-    save_json(statistics, args.output_dir / "tree_analysis.json")
-    save_json({"splits": early_splits}, args.output_dir / "early_splits.json")
-    save_json(audit, args.output_dir / "preprocessing_audit.json")
-    (args.output_dir / "early_tree.txt").write_text(
+    ).to_csv(resolved_results / "baseline_metrics.csv", index=False)
+    classification_report_frame.to_csv(
+        resolved_results / "classification_report.csv"
+    )
+    importance.to_csv(resolved_results / "feature_importance.csv", index=False)
+    save_json(statistics, resolved_trees / "tree_analysis.json")
+    save_json({"splits": early_splits}, resolved_trees / "early_splits.json")
+    save_json(audit, resolved_results / "preprocessing_audit.json")
+    (resolved_trees / "early_tree.txt").write_text(
         extract_early_tree_text(model, feature_names), encoding="utf-8"
     )
-    write_representative_rules(rules, args.output_dir / "representative_rules.md")
+    write_representative_rules(rules, resolved_trees / "representative_rules.md")
 
     plot_confusion_matrix(
         split.y_test,
         y_test_pred,
         model.classes_,
-        args.output_dir / "confusion_matrix.png",
+        resolved_figures / "confusion_matrix.png",
         class_display_names=CLASS_DISPLAY_NAMES,
     )
     plot_tree_top_levels(
         model,
         feature_names,
-        args.output_dir / "baseline_tree_top_levels.png",
+        resolved_figures / "baseline_tree_top_levels.png",
         class_display_names=CLASS_DISPLAY_NAMES,
     )
     plot_full_tree_structure(
         model,
-        args.output_dir / "baseline_tree_full_structure.png",
+        resolved_figures / "baseline_tree_full_structure.png",
         class_display_names=CLASS_DISPLAY_NAMES,
     )
     export_full_tree_dot(
         model,
         feature_names,
-        args.output_dir / "baseline_tree_full.dot",
+        resolved_trees / "baseline_tree_full.dot",
         class_display_names=CLASS_DISPLAY_NAMES,
     )
     plot_feature_importance(
-        importance, args.output_dir / "top_feature_importance.png", top_n=15
+        importance, resolved_figures / "top_feature_importance.png", top_n=15
     )
-    joblib.dump(model, args.output_dir / "baseline_tree_model.joblib")
-    joblib.dump(preprocessing_pipeline, args.shared_output_dir / "preprocessor.joblib")
+    joblib.dump(model, resolved_trees / "baseline_tree_model.joblib")
+    joblib.dump(
+        preprocessing_pipeline,
+        resolved_shared_output / "preprocessor.joblib",
+    )
     np.savez_compressed(
-        args.shared_output_dir / "split_indices.npz",
+        resolved_shared_output / "split_indices.npz",
         train=train_row_indices,
         test=test_row_indices,
     )
@@ -387,7 +460,7 @@ def main() -> None:
         "target_mapping": {"no": 0, "yes": 1},
         "transformed_feature_names": feature_names.tolist(),
     }
-    save_json(shared_manifest, args.shared_output_dir / "split_manifest.json")
+    save_json(shared_manifest, resolved_shared_output / "split_manifest.json")
 
     manifest = {
         "scope": "Hoang baseline Decision Tree and resulting-tree analysis only",
@@ -413,11 +486,12 @@ def main() -> None:
             "joblib": joblib.__version__,
         },
     }
-    save_json(manifest, args.output_dir / "run_manifest.json")
+    save_json(manifest, resolved_results / "run_manifest.json")
 
-    render_report(
-        report_path=args.report,
-        output_dir=args.output_dir,
+    render_baseline_report(
+        report_path=resolved_report,
+        figures_dir=resolved_figures,
+        trees_dir=resolved_trees,
         dataset_path=DATASET_DISPLAY_PATH,
         row_count=len(split.y_train) + len(split.y_test),
         raw_feature_count=split.X_train.shape[1],
@@ -433,14 +507,13 @@ def main() -> None:
         leakage_audit=audit,
     )
 
-    print("Baseline Decision Tree completed successfully.")
-    print(json.dumps(metrics, indent=2))
-    print(json.dumps(statistics, indent=2))
-    print("Top 10 transformed features:")
-    print(importance.head(10).to_string(index=False))
-    print(f"Artifacts: {args.output_dir}")
-    print(f"Report: {args.report}")
-
-
-if __name__ == "__main__":
-    main()
+    return {
+        "metrics": metrics,
+        "tree_statistics": statistics,
+        "top_features": importance.head(10).to_dict(orient="records"),
+        "figures_dir": str(resolved_figures),
+        "results_dir": str(resolved_results),
+        "trees_dir": str(resolved_trees),
+        "shared_output_dir": str(resolved_shared_output),
+        "report": str(resolved_report),
+    }

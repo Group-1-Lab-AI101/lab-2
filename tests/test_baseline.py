@@ -3,18 +3,26 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
 
 from src.artifact_utils import index_fingerprint
+from src.baseline_workflow import (
+    DEFAULT_FIGURES_OUTPUT,
+    DEFAULT_REPORT,
+    DEFAULT_RESULTS_OUTPUT,
+    DEFAULT_SHARED_OUTPUT,
+    DEFAULT_TREES_OUTPUT,
+)
 from src.baseline_tree import (
     baseline_configuration,
     evaluate_classifier,
     extract_feature_importance,
     train_baseline_tree,
 )
-from src.data import load_and_split_data
+from src.data import PROJECT_ROOT, load_and_split_data
 from src.experiment_contract import (
     CLASS_DISPLAY_NAMES,
     FROZEN_BASELINE_PARAMETERS,
@@ -92,6 +100,22 @@ class BaselineTests(unittest.TestCase):
     def test_frozen_baseline_mapping_is_immutable(self) -> None:
         with self.assertRaises(TypeError):
             FROZEN_BASELINE_PARAMETERS["random_state"] = 7  # type: ignore[index]
+
+    def test_unified_runner_and_output_layout(self) -> None:
+        self.assertEqual(DEFAULT_FIGURES_OUTPUT, PROJECT_ROOT / "outputs" / "figures")
+        self.assertEqual(DEFAULT_RESULTS_OUTPUT, PROJECT_ROOT / "outputs" / "results")
+        self.assertEqual(DEFAULT_TREES_OUTPUT, PROJECT_ROOT / "outputs" / "trees")
+        self.assertEqual(DEFAULT_SHARED_OUTPUT, PROJECT_ROOT / "outputs" / "shared")
+        self.assertEqual(
+            DEFAULT_REPORT,
+            PROJECT_ROOT / "docs" / "hoang_baseline_and_tree_analysis.md",
+        )
+        self.assertTrue((PROJECT_ROOT / "run_all.py").is_file())
+        self.assertFalse((PROJECT_ROOT / "run_baseline.py").exists())
+        self.assertFalse((PROJECT_ROOT / "artifacts").exists())
+        self.assertFalse((PROJECT_ROOT / "reports").exists())
+        self.assertFalse((PROJECT_ROOT / "outputs" / "baseline").exists())
+        self.assertIsInstance(Path(DEFAULT_RESULTS_OUTPUT), Path)
 
 
 if __name__ == "__main__":

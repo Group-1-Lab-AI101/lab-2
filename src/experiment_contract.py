@@ -1,8 +1,8 @@
 """Frozen constants shared by every Lab 2 model experiment.
 
-Khang owns the final dataset/preprocessing implementation.  Until that work is
-merged, this module is the single source of truth that keeps Hoang's baseline
-and all later experiments on the same data partition.
+Khang's merged dataset and preprocessing implementation is the source of truth.
+This module freezes the comparison settings that keep Hoang's baseline and all
+later experiments on the same data partition.
 """
 
 from __future__ import annotations
