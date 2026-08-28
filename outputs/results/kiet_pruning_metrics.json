@@ -1,0 +1,120 @@
+{
+  "comparison": [
+    {
+      "accuracy": 0.8737144752847507,
+      "ccp_alpha": 0.0,
+      "criterion": "gini",
+      "depth": 34,
+      "error_rate": 0.12628552471524934,
+      "f1_score": 0.46585594013096354,
+      "leaf_reduction_vs_baseline": 0.0,
+      "leaves": 2876,
+      "model": "Baseline (unpruned)",
+      "nodes": 5751,
+      "precision": 0.46111111111111114,
+      "recall": 0.4706994328922495,
+      "roc_auc": 0.6989063852000384,
+      "train_accuracy": 1.0,
+      "train_test_accuracy_gap": 0.12628552471524934,
+      "validation_accuracy": 0.8777992811722422
+    },
+    {
+      "accuracy": 0.8833351763795201,
+      "ccp_alpha": 0.0,
+      "criterion": "entropy",
+      "depth": 37,
+      "error_rate": 0.11666482362047992,
+      "f1_score": 0.49351896303408543,
+      "leaf_reduction_vs_baseline": 0.045897079276773334,
+      "leaves": 2744,
+      "model": "Unpruned Entropy",
+      "nodes": 5487,
+      "precision": 0.5014634146341463,
+      "recall": 0.48582230623818523,
+      "roc_auc": 0.7109136578153982,
+      "train_accuracy": 1.0,
+      "train_test_accuracy_gap": 0.11666482362047992,
+      "validation_accuracy": 0.8758639756704452
+    },
+    {
+      "accuracy": 0.901249585314608,
+      "ccp_alpha": 0.0001414044317321313,
+      "criterion": "gini",
+      "depth": 18,
+      "error_rate": 0.09875041468539203,
+      "f1_score": 0.5201504567436862,
+      "leaf_reduction_vs_baseline": 0.971835883171071,
+      "leaves": 81,
+      "model": "Pruned Gini",
+      "nodes": 161,
+      "precision": 0.6027397260273972,
+      "recall": 0.45746691871455575,
+      "roc_auc": 0.9074328875147518,
+      "train_accuracy": 0.91050099535501,
+      "train_test_accuracy_gap": 0.009251410040401975,
+      "validation_accuracy": 0.9058612109482997
+    },
+    {
+      "accuracy": 0.9052305650779608,
+      "ccp_alpha": 0.0002650074406517122,
+      "criterion": "entropy",
+      "depth": 18,
+      "error_rate": 0.09476943492203915,
+      "f1_score": 0.5759524987629886,
+      "leaf_reduction_vs_baseline": 0.9614047287899861,
+      "leaves": 111,
+      "model": "Pruned Entropy",
+      "nodes": 221,
+      "precision": 0.6043613707165109,
+      "recall": 0.5500945179584121,
+      "roc_auc": 0.9152814291446746,
+      "train_accuracy": 0.9098927228489272,
+      "train_test_accuracy_gap": 0.004662157770966346,
+      "validation_accuracy": 0.9044788498755875
+    }
+  ],
+  "scope": "Thai Kiet - cost-complexity pruning and Gini/Entropy comparison",
+  "selected_by_criterion": {
+    "entropy": {
+      "ccp_alpha": 0.0002650074406517122,
+      "criterion": "entropy",
+      "depth": 18,
+      "fit_accuracy": 0.9120411972074376,
+      "leaves": 135,
+      "nodes": 269,
+      "train_validation_gap": 0.007562347331850128,
+      "validation_accuracy": 0.9044788498755875,
+      "validation_error_rate": 0.09552115012441253
+    },
+    "gini": {
+      "ccp_alpha": 0.0001414044317321313,
+      "criterion": "gini",
+      "depth": 15,
+      "fit_accuracy": 0.9162231284993433,
+      "leaves": 110,
+      "nodes": 219,
+      "train_validation_gap": 0.010361917551043542,
+      "validation_accuracy": 0.9058612109482997,
+      "validation_error_rate": 0.09413878905170026
+    }
+  },
+  "selected_criterion": "gini",
+  "selected_model": "Pruned Gini",
+  "selection_policy": {
+    "inner_fit_rows": 28934,
+    "inner_validation_rows": 7234,
+    "inner_validation_size": 0.2,
+    "max_alpha_candidates_per_criterion": 40,
+    "rule": "Highest inner-validation accuracy among ccp_alpha > 0; ties prefer fewer leaves, fewer nodes, then smaller ccp_alpha.",
+    "test_set_used_for_selection": false
+  },
+  "split_audit": {
+    "inner_fit_validation_disjoint": true,
+    "official_test_rows": 9043,
+    "official_train_rows": 36168,
+    "official_train_test_disjoint": true,
+    "test_indices_sha256": "c1c3c7f5f45b5ba6159c45650c2f59b8270c4314b3e403e8a549f9047d292055",
+    "test_partition_usage": "final evaluation only",
+    "train_indices_sha256": "b078ac348228f8e49c30af463dc1198fb5e8e11d6379e5d842caf580fc728469"
+  }
+}

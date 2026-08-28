@@ -1,4 +1,4 @@
-"""Run the unified Khang, Hoang baseline, and Hau tuning workflows."""
+"""Run the unified Khang, Hoang, Hau, and Kiet project workflows."""
 
 from __future__ import annotations
 
@@ -26,6 +26,10 @@ from src.hau_hyperparameter_tuning import (
     run_hau_hyperparameter_workflow,
 )
 from src.preprocessing import build_preprocessing_pipeline, get_encoded_feature_names
+from src.pruning_experiment import (
+    DEFAULT_REPORT as DEFAULT_KIET_REPORT,
+    run_pruning_workflow,
+)
 from src.utils import to_pretty_json
 from src.visualization import DEFAULT_FIGURES_DIR, generate_eda_figures
 
@@ -142,7 +146,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Reproduce Khang's EDA/preprocessing, Hoang's frozen baseline, "
-            "and Hau's hyperparameter tuning from one entry point."
+            "Hau's hyperparameter tuning, and Kiet's pruning experiment from "
+            "one entry point."
         )
     )
     parser.add_argument(
@@ -186,15 +191,22 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_HAU_REPORT,
         help=f"Hau tuning Markdown report (default: {DEFAULT_HAU_REPORT})",
     )
+    parser.add_argument(
+        "--kiet-report",
+        type=Path,
+        default=DEFAULT_KIET_REPORT,
+        help=f"Kiet pruning Markdown report (default: {DEFAULT_KIET_REPORT})",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     """Execute the single project workflow and print one combined JSON summary.
 
-    The workflow first regenerates Khang's EDA and figures, then trains and
-    documents Hoang's frozen baseline, and finally tunes Hau's separately owned
-    tree using training-only cross-validation. Exceptions propagate so failures
+    The workflow regenerates Khang's EDA and figures, trains and documents
+    Hoang's frozen baseline, tunes Hau's separately owned tree using
+    training-only cross-validation, then runs Kiet's pruning experiment with
+    the same split and preprocessing contract. Exceptions propagate so failures
     return a non-zero exit status.
 
     Returns:
@@ -231,6 +243,12 @@ def main() -> None:
         baseline_metrics=baseline_report["metrics"],
         baseline_complexity=baseline_report["tree_statistics"],
     )
+    kiet_report = run_pruning_workflow(
+        figures_dir=args.figures_dir,
+        results_dir=args.results_dir,
+        trees_dir=args.trees_dir,
+        report_path=args.kiet_report,
+    )
 
     print(
         to_pretty_json(
@@ -238,6 +256,7 @@ def main() -> None:
                 "khang": khang_report,
                 "baseline": baseline_report,
                 "hau": hau_report,
+                "kiet_pruning": kiet_report,
             }
         )
     )
