@@ -1,0 +1,46 @@
+|--- duration <= 521.500
+|   |--- poutcome_success <= 0.500
+|   |   |--- duration <= 205.500
+|   |   |   |--- month_mar <= 0.500
+|   |   |   |   |--- truncated branch of depth 27
+|   |   |   |--- month_mar >  0.500
+|   |   |   |   |--- truncated branch of depth 12
+|   |   |--- duration >  205.500
+|   |   |   |--- housing_yes <= 0.500
+|   |   |   |   |--- truncated branch of depth 30
+|   |   |   |--- housing_yes >  0.500
+|   |   |   |   |--- truncated branch of depth 31
+|   |--- poutcome_success >  0.500
+|   |   |--- duration <= 132.500
+|   |   |   |--- duration <= 82.500
+|   |   |   |   |--- truncated branch of depth 6
+|   |   |   |--- duration >  82.500
+|   |   |   |   |--- truncated branch of depth 11
+|   |   |--- duration >  132.500
+|   |   |   |--- month_may <= 0.500
+|   |   |   |   |--- truncated branch of depth 19
+|   |   |   |--- month_may >  0.500
+|   |   |   |   |--- truncated branch of depth 10
+|--- duration >  521.500
+|   |--- duration <= 827.500
+|   |   |--- poutcome_success <= 0.500
+|   |   |   |--- contact_unknown <= 0.500
+|   |   |   |   |--- truncated branch of depth 28
+|   |   |   |--- contact_unknown >  0.500
+|   |   |   |   |--- truncated branch of depth 18
+|   |   |--- poutcome_success >  0.500
+|   |   |   |--- housing_no <= 0.500
+|   |   |   |   |--- truncated branch of depth 9
+|   |   |   |--- housing_no >  0.500
+|   |   |   |   |--- truncated branch of depth 6
+|   |--- duration >  827.500
+|   |   |--- contact_cellular <= 0.500
+|   |   |   |--- balance <= 816.500
+|   |   |   |   |--- truncated branch of depth 15
+|   |   |   |--- balance >  816.500
+|   |   |   |   |--- truncated branch of depth 19
+|   |   |--- contact_cellular >  0.500
+|   |   |   |--- age <= 54.500
+|   |   |   |   |--- truncated branch of depth 20
+|   |   |   |--- age >  54.500
+|   |   |   |   |--- truncated branch of depth 15

@@ -1,0 +1,14 @@
+{
+  "depth": 34,
+  "leaves": 2876,
+  "nodes": 5751,
+  "root_left_condition": "duration <= 521.500",
+  "root_right_condition": "duration > 521.500",
+  "root_samples": 36168,
+  "root_split_feature": "duration",
+  "root_split_kind": "numeric",
+  "root_split_threshold": 521.5,
+  "test_accuracy": 0.8737144752847507,
+  "train_accuracy": 1.0,
+  "train_test_accuracy_gap": 0.12628552471524934
+}

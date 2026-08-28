@@ -1,0 +1,74 @@
+{
+  "splits": [
+    {
+      "branch_path": "root",
+      "depth": 0,
+      "feature": "duration",
+      "left_condition": "duration <= 521.500",
+      "predicted_class": "no",
+      "right_condition": "duration > 521.500",
+      "threshold": 521.5,
+      "training_samples": 36168
+    },
+    {
+      "branch_path": "rootL",
+      "depth": 1,
+      "feature": "poutcome_success",
+      "left_condition": "poutcome is not 'success'",
+      "predicted_class": "no",
+      "right_condition": "poutcome is 'success'",
+      "threshold": 0.5,
+      "training_samples": 32180
+    },
+    {
+      "branch_path": "rootLL",
+      "depth": 2,
+      "feature": "duration",
+      "left_condition": "duration <= 205.500",
+      "predicted_class": "no",
+      "right_condition": "duration > 205.500",
+      "threshold": 205.5,
+      "training_samples": 31145
+    },
+    {
+      "branch_path": "rootLR",
+      "depth": 2,
+      "feature": "duration",
+      "left_condition": "duration <= 132.500",
+      "predicted_class": "yes",
+      "right_condition": "duration > 132.500",
+      "threshold": 132.5,
+      "training_samples": 1035
+    },
+    {
+      "branch_path": "rootR",
+      "depth": 1,
+      "feature": "duration",
+      "left_condition": "duration <= 827.500",
+      "predicted_class": "no",
+      "right_condition": "duration > 827.500",
+      "threshold": 827.5,
+      "training_samples": 3988
+    },
+    {
+      "branch_path": "rootRL",
+      "depth": 2,
+      "feature": "poutcome_success",
+      "left_condition": "poutcome is not 'success'",
+      "predicted_class": "no",
+      "right_condition": "poutcome is 'success'",
+      "threshold": 0.5,
+      "training_samples": 2540
+    },
+    {
+      "branch_path": "rootRR",
+      "depth": 2,
+      "feature": "contact_cellular",
+      "left_condition": "contact is not 'cellular'",
+      "predicted_class": "yes",
+      "right_condition": "contact is 'cellular'",
+      "threshold": 0.5,
+      "training_samples": 1448
+    }
+  ]
+}

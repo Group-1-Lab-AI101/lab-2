@@ -1,0 +1,12 @@
+Metric,Result
+accuracy,0.8737144752847507
+error_rate,0.12628552471524934
+precision,0.46111111111111114
+recall,0.4706994328922495
+f1_score,0.46585594013096354
+roc_auc,0.6989063852000384
+train_accuracy,1.0
+test_accuracy,0.8737144752847507
+train_test_accuracy_gap,0.12628552471524934
+positive_class,yes
+zero_division_policy,0

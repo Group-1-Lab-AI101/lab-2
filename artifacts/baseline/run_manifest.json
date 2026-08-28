@@ -1,0 +1,37 @@
+{
+  "configuration": {
+    "ccp_alpha": 0.0,
+    "class_weight": null,
+    "criterion": "gini",
+    "max_depth": null,
+    "max_features": null,
+    "max_leaf_nodes": null,
+    "min_impurity_decrease": 0.0,
+    "min_samples_leaf": 1,
+    "min_samples_split": 2,
+    "min_weight_fraction_leaf": 0.0,
+    "monotonic_cst": null,
+    "random_state": 42,
+    "splitter": "best"
+  },
+  "dataset_path": "data/raw/bank-full.csv",
+  "dataset_rows": 45211,
+  "dataset_sha256": "d1513ec63b385506f7cfce9f2c5caa9fe99e7ba4e8c3fa264b3aaf0f849ed32d",
+  "positive_label": "yes",
+  "random_state": 42,
+  "raw_predictors": 16,
+  "scope": "Hoang baseline Decision Tree and resulting-tree analysis only",
+  "test_indices_sha256": "c1c3c7f5f45b5ba6159c45650c2f59b8270c4314b3e403e8a549f9047d292055",
+  "test_rows": 9043,
+  "test_size": 0.2,
+  "train_indices_sha256": "b078ac348228f8e49c30af463dc1198fb5e8e11d6379e5d842caf580fc728469",
+  "train_rows": 36168,
+  "transformed_features": 51,
+  "versions": {
+    "joblib": "1.5.3",
+    "matplotlib": "3.11.1",
+    "pandas": "3.0.5",
+    "python": "3.14.4",
+    "scikit_learn": "1.9.0"
+  }
+}
