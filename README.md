@@ -1,15 +1,17 @@
 # Lab 2 — Decision Tree Modeling and Improvement
 
 Dự án sử dụng bộ dữ liệu **Bank Marketing** để xây dựng, phân tích và cải thiện
-mô hình Decision Tree. Repository hiện có hai phần hoàn chỉnh chạy từ cùng một
+mô hình Decision Tree. Repository hiện có ba phần hoàn chỉnh chạy từ cùng một
 entry point:
 
 - **Khang:** dataset, EDA, target encoding, stratified train/test split và
   preprocessing pipeline dùng chung;
 - **Hoàng:** baseline Decision Tree cố định, đánh giá, trực quan hóa cây,
-  feature importance và phân tích cây.
+  feature importance và phân tích cây;
+- **Hậu:** validation và combined search cho `max_depth`,
+  `min_samples_split`, `min_samples_leaf`, sau đó so sánh với frozen baseline.
 
-Chưa có code thử nghiệm cải thiện của Hậu, Kiệt hoặc Trung.
+Chưa có code thử nghiệm cải thiện của Kiệt hoặc Trung.
 
 ## Phân công
 
@@ -40,6 +42,7 @@ lab-2/
 │   ├── visualization.py        # EDA figures
 │   ├── baseline_tree.py        # baseline model and tree analysis
 │   ├── baseline_workflow.py    # internal baseline orchestration
+│   ├── hau_hyperparameter_tuning.py # Hậu training-only CV/search workflow
 │   └── experiment_contract.py  # frozen comparison contract
 ├── tests/
 ├── outputs/
@@ -111,7 +114,8 @@ Tất cả cách cài đặt trên đều đưa dependency vào `.venv` của d�
 
 ## Chạy workflow duy nhất
 
-`run_all.py` luôn tái tạo tuần tự phần Khang rồi baseline của Hoàng:
+`run_all.py` luôn tái tạo tuần tự phần Khang, baseline của Hoàng, rồi thí nghiệm
+hyperparameter tuning của Hậu:
 
 ```bash
 uv run python run_all.py
@@ -131,18 +135,20 @@ uv run python run_all.py \
   --results-dir outputs/results \
   --trees-dir outputs/trees \
   --shared-output-dir outputs/shared \
-  --baseline-report docs/hoang_baseline_and_tree_analysis.md
+  --baseline-report docs/hoang_baseline_and_tree_analysis.md \
+  --hau-report docs/hau_improvement_methods.md
 ```
 
 Kết quả mặc định:
 
-- `outputs/figures/`: biểu đồ EDA và các hình đánh giá/cấu trúc baseline;
+- `outputs/figures/`: biểu đồ EDA, baseline và Hậu validation/comparison;
 - `outputs/shared/`: fitted preprocessor, split indices và manifest dùng chung;
 - `outputs/results/`: metrics, classification report, feature importance, audit
-  và run manifest;
+  và run manifest, Hậu validation/search/comparison tables;
 - `outputs/trees/`: fitted model, DOT, rules, early splits và tree statistics;
 - `docs/1-KHANG.md` và `docs/1-KHANG-ENG.md`: báo cáo phần Khang;
 - `docs/hoang_baseline_and_tree_analysis.md`: báo cáo baseline của Hoàng;
+- `docs/hau_improvement_methods.md`: phương pháp và kết quả tuning của Hậu;
 - `docs/BASELINE_HANDOFF.md`: hợp đồng thí nghiệm và hướng dẫn bàn giao.
 
 ## Pipeline chung cho các thành viên tiếp theo

@@ -1,4 +1,4 @@
-"""Run the unified Khang EDA and Hoang baseline project workflows."""
+"""Run the unified Khang, Hoang baseline, and Hau tuning workflows."""
 
 from __future__ import annotations
 
@@ -21,6 +21,10 @@ from src.data import (
 )
 from src.eda import build_eda_report, build_split_report
 from src.experiment_contract import DATASET_PATH, RANDOM_STATE, TEST_SIZE
+from src.hau_hyperparameter_tuning import (
+    DEFAULT_REPORT as DEFAULT_HAU_REPORT,
+    run_hau_hyperparameter_workflow,
+)
 from src.preprocessing import build_preprocessing_pipeline, get_encoded_feature_names
 from src.utils import to_pretty_json
 from src.visualization import DEFAULT_FIGURES_DIR, generate_eda_figures
@@ -137,8 +141,8 @@ def parse_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Reproduce Khang's EDA/preprocessing and Hoang's frozen baseline "
-            "from one entry point."
+            "Reproduce Khang's EDA/preprocessing, Hoang's frozen baseline, "
+            "and Hau's hyperparameter tuning from one entry point."
         )
     )
     parser.add_argument(
@@ -176,6 +180,12 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_SHARED_OUTPUT,
         help=f"Directory for shared fitted outputs (default: {DEFAULT_SHARED_OUTPUT})",
     )
+    parser.add_argument(
+        "--hau-report",
+        type=Path,
+        default=DEFAULT_HAU_REPORT,
+        help=f"Hau tuning Markdown report (default: {DEFAULT_HAU_REPORT})",
+    )
     return parser.parse_args()
 
 
@@ -183,8 +193,9 @@ def main() -> None:
     """Execute the single project workflow and print one combined JSON summary.
 
     The workflow first regenerates Khang's EDA and figures, then trains and
-    documents Hoang's frozen baseline using the same split and preprocessing
-    contract. Exceptions propagate so failures return a non-zero exit status.
+    documents Hoang's frozen baseline, and finally tunes Hau's separately owned
+    tree using training-only cross-validation. Exceptions propagate so failures
+    return a non-zero exit status.
 
     Returns:
         None.
@@ -212,12 +223,21 @@ def main() -> None:
         report_path=args.baseline_report,
         shared_output_dir=args.shared_output_dir,
     )
+    hau_report = run_hau_hyperparameter_workflow(
+        figures_dir=args.figures_dir,
+        results_dir=args.results_dir,
+        trees_dir=args.trees_dir,
+        report_path=args.hau_report,
+        baseline_metrics=baseline_report["metrics"],
+        baseline_complexity=baseline_report["tree_statistics"],
+    )
 
     print(
         to_pretty_json(
             {
                 "khang": khang_report,
                 "baseline": baseline_report,
+                "hau": hau_report,
             }
         )
     )

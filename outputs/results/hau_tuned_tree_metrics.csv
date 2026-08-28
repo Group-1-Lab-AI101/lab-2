@@ -1,0 +1,16 @@
+Metric,Result
+accuracy,0.9004755059161783
+error_rate,0.09952449408382169
+precision,0.5954106280193237
+recall,0.4659735349716446
+f1_score,0.5227995758218452
+roc_auc,0.9005402378988011
+train_accuracy,0.9171090466710905
+test_accuracy,0.9004755059161783
+train_test_accuracy_gap,0.01663354075491219
+positive_class,yes
+positive_class_encoded_value,1
+zero_division_policy,0
+tree_depth,20
+number_of_leaves,339
+node_count,677
