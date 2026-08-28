@@ -17,8 +17,8 @@ Phần này do **Thái Kiệt** phụ trách. Mục tiêu là giảm hiện tư�
 
 | Criterion | Selected `ccp_alpha` | Inner-fit Accuracy | Validation Accuracy | Validation Error | Depth | Leaves | Nodes |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Entropy | 0.00026500744 | 0.912041 | 0.904479 | 0.095521 | 18 | 135 | 269 |
 | Gini | 0.00014140443 | 0.916223 | 0.905861 | 0.094139 | 15 | 110 | 219 |
+| Entropy | 0.00026500744 | 0.912041 | 0.904479 | 0.095521 | 18 | 135 | 269 |
 
 ![Quan hệ giữa pruning, kích thước cây và Accuracy](../outputs/figures/kiet_pruning_tradeoff.png)
 

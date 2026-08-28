@@ -1,7 +1,7 @@
 # Lab 2 — Decision Tree Modeling and Improvement
 
 Dự án sử dụng bộ dữ liệu **Bank Marketing** để xây dựng, phân tích và cải thiện
-mô hình Decision Tree. Repository hiện có bốn phần hoàn chỉnh chạy từ cùng một
+mô hình Decision Tree. Repository hiện có năm phần hoàn chỉnh chạy từ cùng một
 entry point:
 
 - **Khang:** dataset, EDA, target encoding, stratified train/test split và
@@ -12,8 +12,8 @@ entry point:
   `min_samples_split`, `min_samples_leaf`, sau đó so sánh với frozen baseline;
 - **Kiệt:** Cost-Complexity Pruning, chọn `ccp_alpha` trên validation, so sánh
   Gini/Entropy và phân tích kích thước cây so với hiệu suất.
-
-Chưa có code thử nghiệm cải thiện của Trung.
+- **Trung:** chọn `class_weight` bằng training-only cross-validation, xử lý mất
+  cân bằng lớp và tổng hợp comparison/conclusion của nhóm.
 
 ## Phân công
 
@@ -23,7 +23,7 @@ Chưa có code thử nghiệm cải thiện của Trung.
 | Hoàng | Frozen baseline, metrics, confusion matrix, tree visualization và tree analysis |
 | Hậu | `max_depth`, `min_samples_split`, `min_samples_leaf` và validation |
 | Kiệt | Cost-complexity pruning với `ccp_alpha` |
-| Trung | Xử lý mất cân bằng bằng `class_weight`, comparison và conclusion |
+| Trung | `class_weight`, comparison, conclusion và notebook thuyết trình |
 
 ## Cấu trúc chính
 
@@ -33,14 +33,16 @@ lab-2/
 │   ├── bank-full.csv
 │   └── bank-names.txt
 ├── notebooks/
-│   └── kiet_pruning_visualization.ipynb  # thí nghiệm pruning và trực quan hóa
+│   ├── kiet_pruning_visualization.ipynb  # thí nghiệm pruning và trực quan hóa
+│   └── trung_class_weight_and_comparison.ipynb # class weight và kết luận
 ├── docs/
 │   ├── 1-KHANG.md
 │   ├── 1-KHANG-ENG.md
 │   ├── BASELINE_HANDOFF.md
 │   ├── hoang_baseline_and_tree_analysis.md
 │   ├── hau_improvement_methods.md
-│   └── kiet_pruning_and_criterion.md
+│   ├── kiet_pruning_and_criterion.md
+│   └── trung_class_weight_and_conclusion.md
 ├── src/
 │   ├── data.py                 # load, validate, target mapping, split
 │   ├── preprocessing.py        # shared one-hot pipeline
@@ -50,12 +52,13 @@ lab-2/
 │   ├── baseline_workflow.py    # internal baseline orchestration
 │   ├── hau_hyperparameter_tuning.py # Hậu training-only CV/search workflow
 │   ├── pruning_experiment.py   # Kiet: ccp_alpha, Gini/Entropy, size trade-off
+│   ├── trung_class_weight.py   # Trung: class weighting và team comparison
 │   └── experiment_contract.py  # frozen comparison contract
 ├── tests/
 ├── experiments/
 │   └── 2-BASELINE-DECISION-TREE.ipynb # English presentation notebook
 ├── outputs/
-│   ├── figures/                # EDA, baseline, tuning, and pruning PNG figures
+│   ├── figures/                # EDA và figures của mọi model experiment
 │   ├── shared/                 # official preprocessor and split identity
 │   ├── results/                # metrics, tabular reports, audits and manifests
 │   └── trees/                  # fitted trees, DOT, rules and structure data
@@ -125,7 +128,7 @@ Tất cả cách cài đặt trên đều đưa dependency vào `.venv` của d�
 ## Chạy workflow duy nhất
 
 `run_all.py` luôn tái tạo tuần tự phần Khang, baseline của Hoàng, thí nghiệm
-hyperparameter tuning của Hậu và thí nghiệm pruning của Kiệt:
+hyperparameter tuning của Hậu, pruning của Kiệt và class weighting của Trung:
 
 Phần dữ liệu và preprocessing được giữ ở dạng module Python dùng chung; notebook
 trình bày chỉ import các module này và không sao chép pipeline.
@@ -134,8 +137,8 @@ trình bày chỉ import các module này và không sao chép pipeline.
 uv run python run_all.py
 ```
 
-Không sinh lại hình EDA nhưng vẫn chạy toàn bộ phần dữ liệu, baseline, tuning và
-pruning:
+Không sinh lại hình EDA nhưng vẫn chạy toàn bộ phần dữ liệu, baseline, tuning,
+pruning và class weighting:
 
 ```bash
 uv run python run_all.py --skip-figures
@@ -151,20 +154,22 @@ uv run python run_all.py \
   --shared-output-dir outputs/shared \
   --baseline-report docs/hoang_baseline_and_tree_analysis.md \
   --hau-report docs/hau_improvement_methods.md \
-  --kiet-report docs/kiet_pruning_and_criterion.md
+  --kiet-report docs/kiet_pruning_and_criterion.md \
+  --trung-report docs/trung_class_weight_and_conclusion.md
 ```
 
 Kết quả mặc định:
 
-- `outputs/figures/`: biểu đồ EDA, baseline, Hậu validation và Kiệt pruning;
+- `outputs/figures/`: biểu đồ EDA, baseline và các improvement experiments;
 - `outputs/shared/`: fitted preprocessor, split indices và manifest dùng chung;
 - `outputs/results/`: metrics, classification report, feature importance, audit,
-  Hậu validation/search và Kiệt pruning/comparison tables;
+  Hậu validation/search, Kiệt pruning và Trung class-weight/comparison tables;
 - `outputs/trees/`: fitted model, DOT, rules, early splits và tree statistics;
 - `docs/1-KHANG.md` và `docs/1-KHANG-ENG.md`: báo cáo phần Khang;
 - `docs/hoang_baseline_and_tree_analysis.md`: báo cáo baseline của Hoàng;
 - `docs/hau_improvement_methods.md`: phương pháp và kết quả tuning của Hậu;
 - `docs/kiet_pruning_and_criterion.md`: phần Improvement Methods - Phương pháp 2;
+- `docs/trung_class_weight_and_conclusion.md`: class weight và kết luận toàn nhóm;
 - `docs/BASELINE_HANDOFF.md`: hợp đồng thí nghiệm và hướng dẫn bàn giao.
 
 For presentation or video recording, open the English notebook
@@ -242,6 +247,17 @@ hai lệnh:
 
 Trong JupyterLab hoặc VS Code, chọn **Run All Cells** để tái tạo toàn bộ bảng và
 biểu đồ. Notebook chỉ chạy lại workflow pruning khi thiếu kết quả thí nghiệm.
+
+## Notebook phần Trung
+
+Notebook đã chạy sẵn trình bày class imbalance, validation các `class_weight`,
+Confusion Matrix, bảng `Comparison of Results` và `Conclusion`:
+
+    uv run jupyter lab notebooks/trung_class_weight_and_comparison.ipynb
+
+Notebook đọc các artifact do `src/trung_class_weight.py` sinh ra và chỉ chạy lại
+workflow khi thiếu kết quả. Cấu hình được chọn bằng F1 trên training-only
+cross-validation; test set không được dùng để chọn weight.
 
 Hợp đồng so sánh cố định:
 

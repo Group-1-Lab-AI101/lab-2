@@ -1,4 +1,4 @@
-"""Run the unified Khang, Hoang, Hau, and Kiet project workflows."""
+"""Run the unified Khang, Hoang, Hau, Kiet, and Trung project workflows."""
 
 from __future__ import annotations
 
@@ -32,6 +32,10 @@ from src.pruning_experiment import (
 )
 from src.utils import to_pretty_json
 from src.visualization import DEFAULT_FIGURES_DIR, generate_eda_figures
+from src.trung_class_weight import (
+    DEFAULT_REPORT as DEFAULT_TRUNG_REPORT,
+    run_trung_class_weight_workflow,
+)
 
 
 def build_report(
@@ -146,8 +150,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Reproduce Khang's EDA/preprocessing, Hoang's frozen baseline, "
-            "Hau's hyperparameter tuning, and Kiet's pruning experiment from "
-            "one entry point."
+            "Hau's hyperparameter tuning, Kiet's pruning experiment, and "
+            "Trung's class-weight comparison from one entry point."
         )
     )
     parser.add_argument(
@@ -197,6 +201,12 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_KIET_REPORT,
         help=f"Kiet pruning Markdown report (default: {DEFAULT_KIET_REPORT})",
     )
+    parser.add_argument(
+        "--trung-report",
+        type=Path,
+        default=DEFAULT_TRUNG_REPORT,
+        help=f"Trung class-weight report (default: {DEFAULT_TRUNG_REPORT})",
+    )
     return parser.parse_args()
 
 
@@ -205,9 +215,10 @@ def main() -> None:
 
     The workflow regenerates Khang's EDA and figures, trains and documents
     Hoang's frozen baseline, tunes Hau's separately owned tree using
-    training-only cross-validation, then runs Kiet's pruning experiment with
-    the same split and preprocessing contract. Exceptions propagate so failures
-    return a non-zero exit status.
+    training-only cross-validation, runs Kiet's pruning experiment, then runs
+    Trung's class-weight selection and final team comparison with the same split
+    and preprocessing contract. Exceptions propagate so failures return a
+    non-zero exit status.
 
     Returns:
         None.
@@ -249,6 +260,12 @@ def main() -> None:
         trees_dir=args.trees_dir,
         report_path=args.kiet_report,
     )
+    trung_report = run_trung_class_weight_workflow(
+        figures_dir=args.figures_dir,
+        results_dir=args.results_dir,
+        trees_dir=args.trees_dir,
+        report_path=args.trung_report,
+    )
 
     print(
         to_pretty_json(
@@ -257,6 +274,7 @@ def main() -> None:
                 "baseline": baseline_report,
                 "hau": hau_report,
                 "kiet_pruning": kiet_report,
+                "trung_class_weight": trung_report,
             }
         )
     )
