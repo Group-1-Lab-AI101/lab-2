@@ -1,0 +1,115 @@
+{
+  "bootstrap_replicates": 2000,
+  "confidence_level": 0.95,
+  "descriptive_reference_highest_test_f1": "Trung Weighted + Tuned",
+  "intervals": [
+    {
+      "bootstrap_replicates": 2000,
+      "ci_lower": 0.8680747539533341,
+      "ci_upper": 0.8802388587858012,
+      "confidence_level": 0.95,
+      "metric": "accuracy",
+      "model": "Hoang Baseline",
+      "point_estimate": 0.8737144752847507
+    },
+    {
+      "bootstrap_replicates": 2000,
+      "ci_lower": 0.44298420339508526,
+      "ci_upper": 0.491621369406805,
+      "confidence_level": 0.95,
+      "metric": "f1_score",
+      "model": "Hoang Baseline",
+      "point_estimate": 0.46585594013096354
+    },
+    {
+      "bootstrap_replicates": 2000,
+      "ci_lower": 0.8950569501271702,
+      "ci_upper": 0.9058940617051864,
+      "confidence_level": 0.95,
+      "metric": "accuracy",
+      "model": "Hau Tuned",
+      "point_estimate": 0.9004755059161783
+    },
+    {
+      "bootstrap_replicates": 2000,
+      "ci_lower": 0.49515051309651953,
+      "ci_upper": 0.550556291266434,
+      "confidence_level": 0.95,
+      "metric": "f1_score",
+      "model": "Hau Tuned",
+      "point_estimate": 0.5227995758218452
+    },
+    {
+      "bootstrap_replicates": 2000,
+      "ci_lower": 0.8988167643481145,
+      "ci_upper": 0.9097644586973349,
+      "confidence_level": 0.95,
+      "metric": "accuracy",
+      "model": "Kiet Pruned Entropy",
+      "point_estimate": 0.9044564856795311
+    },
+    {
+      "bootstrap_replicates": 2000,
+      "ci_lower": 0.5406748384958537,
+      "ci_upper": 0.5920427275387766,
+      "confidence_level": 0.95,
+      "metric": "f1_score",
+      "model": "Kiet Pruned Entropy",
+      "point_estimate": 0.5667001003009027
+    },
+    {
+      "bootstrap_replicates": 2000,
+      "ci_lower": 0.8732721441999336,
+      "ci_upper": 0.8863209112020347,
+      "confidence_level": 0.95,
+      "metric": "accuracy",
+      "model": "Trung Weighted + Tuned",
+      "point_estimate": 0.880128276014597
+    },
+    {
+      "bootstrap_replicates": 2000,
+      "ci_lower": 0.5766306388761654,
+      "ci_upper": 0.6128116941200226,
+      "confidence_level": 0.95,
+      "metric": "f1_score",
+      "model": "Trung Weighted + Tuned",
+      "point_estimate": 0.5952203136669156
+    }
+  ],
+  "method": "paired stratified percentile bootstrap on the common held-out rows",
+  "paired_f1_differences": [
+    {
+      "ci_lower": -0.15474552205572736,
+      "ci_upper": -0.10264663394953441,
+      "interval_includes_zero": false,
+      "model": "Hoang Baseline",
+      "point_f1_difference": -0.1293643735359521,
+      "reference_model": "Trung Weighted + Tuned"
+    },
+    {
+      "ci_lower": -0.09858929418277809,
+      "ci_upper": -0.04804340588247342,
+      "interval_includes_zero": false,
+      "model": "Hau Tuned",
+      "point_f1_difference": -0.07242073784507042,
+      "reference_model": "Trung Weighted + Tuned"
+    },
+    {
+      "ci_lower": -0.051429259358266144,
+      "ci_upper": -0.005997399647301372,
+      "interval_includes_zero": false,
+      "model": "Kiet Pruned Entropy",
+      "point_f1_difference": -0.02852021336601296,
+      "reference_model": "Trung Weighted + Tuned"
+    },
+    {
+      "ci_lower": 0.0,
+      "ci_upper": 0.0,
+      "interval_includes_zero": true,
+      "model": "Trung Weighted + Tuned",
+      "point_f1_difference": 0.0,
+      "reference_model": "Trung Weighted + Tuned"
+    }
+  ],
+  "selection_warning": "Intervals quantify held-out uncertainty and do not replace training-only hyperparameter selection."
+}

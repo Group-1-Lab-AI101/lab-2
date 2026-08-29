@@ -8,7 +8,7 @@ from pathlib import Path
 
 from sklearn.tree import DecisionTreeClassifier
 
-from src.data import load_bank_data, load_and_split_data
+from src.data import load_bank_data, load_and_split_data, validate_bank_data_frame
 from src.eda import build_eda_report
 from src.preprocessing import (
     build_model_pipeline,
@@ -33,6 +33,35 @@ class KhangPipelineTests(unittest.TestCase):
 
         self.assertEqual(self.frame.shape, (45_211, 17))
         self.assertEqual(int(self.frame.isna().sum().sum()), 0)
+
+    def test_strict_value_validation_rejects_malformed_features(self) -> None:
+        """Schema-preserving corruption must fail before modeling."""
+
+        corruptions = []
+        invalid_age = self.frame.copy()
+        invalid_age.loc[0, "age"] = -1
+        corruptions.append(invalid_age)
+
+        invalid_campaign = self.frame.copy()
+        invalid_campaign.loc[0, "campaign"] = 0
+        corruptions.append(invalid_campaign)
+
+        invalid_category = self.frame.copy()
+        invalid_category.loc[0, "job"] = "invented-job"
+        corruptions.append(invalid_category)
+
+        invalid_dtype = self.frame.copy()
+        invalid_dtype["duration"] = invalid_dtype["duration"].astype(float)
+        corruptions.append(invalid_dtype)
+
+        duplicate_index = self.frame.copy()
+        duplicate_index.index = [0, *duplicate_index.index[1:-1], 0]
+        corruptions.append(duplicate_index)
+
+        for malformed in corruptions:
+            with self.subTest(columns=malformed.dtypes.astype(str).to_dict()):
+                with self.assertRaises(ValueError):
+                    validate_bank_data_frame(malformed)
 
     def test_eda_report_reproduces_target_counts(self) -> None:
         """Confirm documented target counts are generated from the source data."""

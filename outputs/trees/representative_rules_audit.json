@@ -1,0 +1,87 @@
+{
+  "rules": [
+    {
+      "conditions": [
+        "duration <= 521.500",
+        "poutcome is not 'success'",
+        "duration <= 205.500",
+        "month is not 'mar'",
+        "month is 'oct'",
+        "duration <= 95.500",
+        "marital is not 'divorced'"
+      ],
+      "depth": 7,
+      "evaluation_purity": 1.0,
+      "evaluation_sample_count": 23,
+      "leaf_id": 1058,
+      "predicted_class": "no",
+      "predicted_class_value": 0,
+      "purity": 1.0,
+      "sample_count": 76,
+      "weighted_sample_count": 76.0
+    },
+    {
+      "conditions": [
+        "duration <= 521.500",
+        "poutcome is 'success'",
+        "duration <= 132.500",
+        "duration > 82.500",
+        "month is not 'sep'",
+        "pdays > 102.500",
+        "balance > 247.500",
+        "month is not 'mar'",
+        "age <= 61.000",
+        "month is not 'oct'"
+      ],
+      "depth": 10,
+      "evaluation_purity": 0.7142857142857143,
+      "evaluation_sample_count": 7,
+      "leaf_id": 3440,
+      "predicted_class": "no",
+      "predicted_class_value": 0,
+      "purity": 1.0,
+      "sample_count": 46,
+      "weighted_sample_count": 46.0
+    },
+    {
+      "conditions": [
+        "duration > 521.500",
+        "duration <= 827.500",
+        "poutcome is 'success'",
+        "housing is 'no'",
+        "day <= 30.500",
+        "job is not 'entrepreneur'",
+        "day > 1.500",
+        "education is not 'unknown'"
+      ],
+      "depth": 8,
+      "evaluation_purity": 0.8095238095238095,
+      "evaluation_sample_count": 21,
+      "leaf_id": 4992,
+      "predicted_class": "yes",
+      "predicted_class_value": 1,
+      "purity": 1.0,
+      "sample_count": 55,
+      "weighted_sample_count": 55.0
+    },
+    {
+      "conditions": [
+        "duration > 521.500",
+        "duration > 827.500",
+        "contact is 'cellular'",
+        "age <= 54.500",
+        "poutcome is 'success'",
+        "day > 8.000"
+      ],
+      "depth": 6,
+      "evaluation_purity": 0.6,
+      "evaluation_sample_count": 5,
+      "leaf_id": 5681,
+      "predicted_class": "yes",
+      "predicted_class_value": 1,
+      "purity": 1.0,
+      "sample_count": 24,
+      "weighted_sample_count": 24.0
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-"""Training, evaluation, visualization, and interpretation of the baseline tree."""
+"""Training, visualization, and structural interpretation of the baseline tree."""
 
 from __future__ import annotations
 
@@ -13,16 +13,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.collections import LineCollection
-from sklearn.metrics import (
-    ConfusionMatrixDisplay,
-    accuracy_score,
-    classification_report,
-    confusion_matrix,
-    f1_score,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-)
 from sklearn.tree import DecisionTreeClassifier, export_graphviz, export_text, plot_tree
 
 from src.experiment_contract import FROZEN_BASELINE_PARAMETERS
@@ -68,110 +58,6 @@ def baseline_configuration(model: DecisionTreeClassifier) -> dict[str, Any]:
             f"Baseline configuration changed: expected {expected}, got {configuration}"
         )
     return configuration
-
-
-def evaluate_classifier(
-    model: DecisionTreeClassifier,
-    X_train: np.ndarray,
-    y_train: Sequence[Any],
-    X_test: np.ndarray,
-    y_test: Sequence[Any],
-    *,
-    positive_label: Any,
-    positive_class_name: str | None = None,
-    class_display_names: Sequence[str] | None = None,
-) -> tuple[dict[str, Any], pd.DataFrame, np.ndarray]:
-    """Evaluate the held-out test predictions and positive-class probabilities."""
-
-    y_train_pred = model.predict(X_train)
-    y_test_pred = model.predict(X_test)
-    class_labels = list(model.classes_)
-    if positive_label not in class_labels:
-        raise ValueError(f"Positive label {positive_label!r} not in {class_labels}.")
-    positive_index = class_labels.index(positive_label)
-    positive_scores = model.predict_proba(X_test)[:, positive_index]
-    display_names = _class_names(model, class_display_names)
-
-    train_accuracy = accuracy_score(y_train, y_train_pred)
-    test_accuracy = accuracy_score(y_test, y_test_pred)
-    matrix = confusion_matrix(y_test, y_test_pred, labels=class_labels)
-    report = classification_report(
-        y_test,
-        y_test_pred,
-        labels=class_labels,
-        target_names=display_names,
-        output_dict=True,
-        zero_division=0,
-    )
-    # ``classification_report(..., output_dict=True)`` returns accuracy as a
-    # scalar while every other entry is a mapping. Passing that mixed mapping
-    # straight to ``DataFrame`` broadcasts accuracy into every column, including
-    # ``support``. Build the summary row explicitly so the exported table keeps
-    # sklearn's text-report semantics: accuracy is shown in the f1-score column
-    # and support is the number of held-out observations.
-    report_accuracy = float(report.pop("accuracy"))
-    report_frame = pd.DataFrame(report).transpose()
-    report_frame.loc["accuracy"] = {
-        "precision": np.nan,
-        "recall": np.nan,
-        "f1-score": report_accuracy,
-        "support": float(len(y_test)),
-    }
-    report_frame = report_frame.loc[
-        [*display_names, "accuracy", "macro avg", "weighted avg"]
-    ]
-    metrics = {
-        "accuracy": float(test_accuracy),
-        "error_rate": float(1.0 - test_accuracy),
-        "precision": float(
-            precision_score(y_test, y_test_pred, pos_label=positive_label, zero_division=0)
-        ),
-        "recall": float(
-            recall_score(y_test, y_test_pred, pos_label=positive_label, zero_division=0)
-        ),
-        "f1_score": float(
-            f1_score(y_test, y_test_pred, pos_label=positive_label, zero_division=0)
-        ),
-        "roc_auc": float(roc_auc_score(y_test, positive_scores)),
-        "train_accuracy": float(train_accuracy),
-        "test_accuracy": float(test_accuracy),
-        "train_test_accuracy_gap": float(train_accuracy - test_accuracy),
-        "positive_class": positive_class_name or str(positive_label),
-        "positive_class_encoded_value": positive_label,
-        "class_labels": display_names,
-        "zero_division_policy": 0,
-        "confusion_matrix": matrix.tolist(),
-    }
-    return metrics, report_frame, y_test_pred
-
-
-def plot_confusion_matrix(
-    y_test: Sequence[Any],
-    y_pred: Sequence[Any],
-    class_values: Sequence[Any],
-    output_path: str | Path,
-    *,
-    class_display_names: Sequence[str] | None = None,
-) -> None:
-    """Save a report-ready confusion matrix with correct axis semantics."""
-
-    matrix = confusion_matrix(y_test, y_pred, labels=class_values)
-    display_names = (
-        [str(label) for label in class_values]
-        if class_display_names is None
-        else list(class_display_names)
-    )
-    if len(display_names) != len(class_values):
-        raise ValueError("Class display names do not align with class values.")
-    figure, axis = plt.subplots(figsize=(7.2, 6.2))
-    display = ConfusionMatrixDisplay(matrix, display_labels=display_names)
-    display.plot(ax=axis, cmap="Blues", colorbar=False, values_format="d")
-    axis.set_title("Baseline Decision Tree - Confusion Matrix", pad=14)
-    axis.set_xlabel("Predicted label")
-    axis.set_ylabel("True label")
-    figure.tight_layout()
-    figure.savefig(output_path, dpi=300, bbox_inches="tight")
-    plt.close(figure)
 
 
 def plot_tree_top_levels(
@@ -454,7 +340,11 @@ def extract_representative_rules(
             predicted_index = int(np.argmax(counts))
             candidates.append(
                 {
+                    "leaf_id": int(node_id),
                     "predicted_class": display_names[predicted_index],
+                    "predicted_class_value": model.classes_[predicted_index].item()
+                    if isinstance(model.classes_[predicted_index], np.generic)
+                    else model.classes_[predicted_index],
                     "sample_count": int(tree.n_node_samples[node_id]),
                     "weighted_sample_count": float(tree.weighted_n_node_samples[node_id]),
                     "purity": float(counts[predicted_index] / counts.sum()),
@@ -490,6 +380,33 @@ def extract_representative_rules(
     return selected
 
 
+def audit_representative_rules(
+    model: DecisionTreeClassifier,
+    rules: Iterable[dict[str, Any]],
+    X_evaluation: Any,
+    y_evaluation: Sequence[Any],
+) -> list[dict[str, Any]]:
+    """Measure each selected training leaf's support and purity out of sample."""
+
+    leaves = model.apply(X_evaluation)
+    targets = np.asarray(y_evaluation)
+    if len(leaves) != len(targets):
+        raise ValueError("Evaluation predictors and labels must have equal lengths.")
+    audited: list[dict[str, Any]] = []
+    for rule in rules:
+        record = dict(rule)
+        mask = leaves == int(record["leaf_id"])
+        support = int(mask.sum())
+        record["evaluation_sample_count"] = support
+        record["evaluation_purity"] = (
+            float(np.mean(targets[mask] == record["predicted_class_value"]))
+            if support
+            else None
+        )
+        audited.append(record)
+    return audited
+
+
 def write_representative_rules(
     rules: Iterable[dict[str, Any]],
     output_path: str | Path,
@@ -515,6 +432,15 @@ def write_representative_rules(
                 (
                     f"Leaf support: {rule['sample_count']:,} training rows; "
                     f"leaf purity: {rule['purity']:.3f}; path depth: {rule['depth']}."
+                ),
+                (
+                    f"Held-out support: {rule.get('evaluation_sample_count', 0):,} rows; "
+                    "held-out purity: "
+                    + (
+                        f"{rule['evaluation_purity']:.3f}."
+                        if rule.get("evaluation_purity") is not None
+                        else "not estimable (no matching rows)."
+                    )
                 ),
                 "",
             ]

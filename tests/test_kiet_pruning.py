@@ -15,6 +15,7 @@ from src.pruning_experiment import (
     DEFAULT_REPORT,
     DEFAULT_RESULTS_OUTPUT,
     DEFAULT_TREES_OUTPUT,
+    make_ccp_alpha_grid,
     sample_ccp_alphas,
     select_best_pruned_candidate,
     tree_parameters,
@@ -41,27 +42,35 @@ class KietPruningTests(unittest.TestCase):
         self.assertTrue(np.all(np.diff(sampled) > 0.0))
         self.assertLess(sampled[-1], path[-1])
 
+        fixed_grid = make_ccp_alpha_grid(max_candidates=12)
+        self.assertEqual(fixed_grid[0], 0.0)
+        self.assertEqual(len(fixed_grid), 12)
+        self.assertTrue(np.all(np.diff(fixed_grid) > 0.0))
+
     def test_selection_excludes_unpruned_and_prefers_simpler_ties(self) -> None:
         candidates = pd.DataFrame(
             [
                 {
                     "criterion": "gini",
                     "ccp_alpha": 0.0,
-                    "validation_accuracy": 0.95,
+                    "mean_cv_f1": 0.95,
+                    "mean_cv_recall": 0.80,
                     "leaves": 100,
                     "nodes": 199,
                 },
                 {
                     "criterion": "gini",
                     "ccp_alpha": 0.001,
-                    "validation_accuracy": 0.93,
+                    "mean_cv_f1": 0.93,
+                    "mean_cv_recall": 0.75,
                     "leaves": 30,
                     "nodes": 59,
                 },
                 {
                     "criterion": "gini",
                     "ccp_alpha": 0.002,
-                    "validation_accuracy": 0.93,
+                    "mean_cv_f1": 0.93,
+                    "mean_cv_recall": 0.75,
                     "leaves": 20,
                     "nodes": 39,
                 },
@@ -71,6 +80,29 @@ class KietPruningTests(unittest.TestCase):
         selected = select_best_pruned_candidate(candidates)
         self.assertEqual(selected["ccp_alpha"], 0.002)
         self.assertEqual(selected["leaves"], 20)
+
+    def test_selection_prioritizes_f1_then_recall(self) -> None:
+        candidates = pd.DataFrame(
+            [
+                {
+                    "criterion": "gini",
+                    "ccp_alpha": 0.001,
+                    "mean_cv_f1": 0.50,
+                    "mean_cv_recall": 0.40,
+                    "leaves": 10,
+                    "nodes": 19,
+                },
+                {
+                    "criterion": "gini",
+                    "ccp_alpha": 0.002,
+                    "mean_cv_f1": 0.50,
+                    "mean_cv_recall": 0.60,
+                    "leaves": 20,
+                    "nodes": 39,
+                },
+            ]
+        )
+        self.assertEqual(select_best_pruned_candidate(candidates)["ccp_alpha"], 0.002)
 
     def test_invalid_criterion_and_alpha_are_rejected(self) -> None:
         with self.assertRaises(ValueError):

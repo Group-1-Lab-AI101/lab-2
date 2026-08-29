@@ -9,6 +9,17 @@
   "cv_strategy": "StratifiedKFold(n_splits=5, shuffle=True, random_state=42)",
   "dataset_path": "data/bank-full.csv",
   "estimator_step": "model",
+  "experiment_identity": {
+    "dataset_sha256": "d1513ec63b385506f7cfce9f2c5caa9fe99e7ba4e8c3fa264b3aaf0f849ed32d",
+    "random_state": 42,
+    "target_mapping": {
+      "no": 0,
+      "yes": 1
+    },
+    "test_indices_sha256": "c1c3c7f5f45b5ba6159c45650c2f59b8270c4314b3e403e8a549f9047d292055",
+    "test_size": 0.2,
+    "train_indices_sha256": "b078ac348228f8e49c30af463dc1198fb5e8e11d6379e5d842caf580fc728469"
+  },
   "preprocessing": "src.preprocessing.build_model_pipeline",
   "preprocessing_cv_fit_scope": "each training fold only",
   "random_state": 42,

@@ -17,11 +17,13 @@ from src.baseline_workflow import (
     DEFAULT_TREES_OUTPUT,
 )
 from src.baseline_tree import (
+    audit_representative_rules,
     baseline_configuration,
-    evaluate_classifier,
     extract_feature_importance,
+    extract_representative_rules,
     train_baseline_tree,
 )
+from src.evaluation import evaluate_classifier
 from src.data import PROJECT_ROOT, load_and_split_data
 from src.experiment_contract import (
     CLASS_DISPLAY_NAMES,
@@ -104,6 +106,26 @@ class BaselineTests(unittest.TestCase):
         self.assertEqual(len(importance), self.X_train_processed.shape[1])
         self.assertAlmostEqual(importance["Importance"].sum(), 1.0)
         self.assertEqual(baseline_configuration(model), dict(FROZEN_BASELINE_PARAMETERS))
+
+        rules = extract_representative_rules(
+            model,
+            self.feature_names,
+            class_display_names=CLASS_DISPLAY_NAMES,
+        )
+        audited = audit_representative_rules(
+            model,
+            rules,
+            self.X_test_processed,
+            self.split.y_test,
+        )
+        self.assertTrue(all("evaluation_sample_count" in rule for rule in audited))
+        self.assertTrue(
+            all(
+                rule["evaluation_purity"] is None
+                or 0.0 <= rule["evaluation_purity"] <= 1.0
+                for rule in audited
+            )
+        )
 
     def test_frozen_baseline_mapping_is_immutable(self) -> None:
         with self.assertRaises(TypeError):

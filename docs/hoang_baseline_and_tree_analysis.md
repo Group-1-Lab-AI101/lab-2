@@ -64,10 +64,10 @@ The internal splits through depth 2 are listed below. For a one-hot feature such
 
 Representative fitted leaf rules were selected programmatically for high support and moderate path length:
 
-1. IF duration <= 521.500 AND poutcome is not 'success' AND duration <= 205.500 AND month is not 'mar' AND month is 'oct' AND duration <= 95.500 AND marital is not 'divorced', THEN predict **no** (training support = 76, purity = 1.000, path depth = 7).
-2. IF duration <= 521.500 AND poutcome is 'success' AND duration <= 132.500 AND duration > 82.500 AND month is not 'sep' AND pdays > 102.500 AND balance > 247.500 AND month is not 'mar' AND age <= 61.000 AND month is not 'oct', THEN predict **no** (training support = 46, purity = 1.000, path depth = 10).
-3. IF duration > 521.500 AND duration <= 827.500 AND poutcome is 'success' AND housing is 'no' AND day <= 30.500 AND job is not 'entrepreneur' AND day > 1.500 AND education is not 'unknown', THEN predict **yes** (training support = 55, purity = 1.000, path depth = 8).
-4. IF duration > 521.500 AND duration > 827.500 AND contact is 'cellular' AND age <= 54.500 AND poutcome is 'success' AND day > 8.000, THEN predict **yes** (training support = 24, purity = 1.000, path depth = 6).
+1. IF duration <= 521.500 AND poutcome is not 'success' AND duration <= 205.500 AND month is not 'mar' AND month is 'oct' AND duration <= 95.500 AND marital is not 'divorced', THEN predict **no** (training support = 76, purity = 1.000, held-out support = 23, held-out purity = 1.000, path depth = 7).
+2. IF duration <= 521.500 AND poutcome is 'success' AND duration <= 132.500 AND duration > 82.500 AND month is not 'sep' AND pdays > 102.500 AND balance > 247.500 AND month is not 'mar' AND age <= 61.000 AND month is not 'oct', THEN predict **no** (training support = 46, purity = 1.000, held-out support = 7, held-out purity = 0.714, path depth = 10).
+3. IF duration > 521.500 AND duration <= 827.500 AND poutcome is 'success' AND housing is 'no' AND day <= 30.500 AND job is not 'entrepreneur' AND day > 1.500 AND education is not 'unknown', THEN predict **yes** (training support = 55, purity = 1.000, held-out support = 21, held-out purity = 0.810, path depth = 8).
+4. IF duration > 521.500 AND duration > 827.500 AND contact is 'cellular' AND age <= 54.500 AND poutcome is 'success' AND day > 8.000, THEN predict **yes** (training support = 24, purity = 1.000, held-out support = 5, held-out purity = 0.600, path depth = 6).
 
 These rules describe associations learned by this fitted tree. They should not be interpreted as causal effects. The exact early-level tree text is saved in `../outputs/trees/early_tree.txt`, and the complete labeled tree is available in `../outputs/trees/baseline_tree_full.dot`.
 

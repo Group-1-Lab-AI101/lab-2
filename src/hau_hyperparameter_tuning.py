@@ -22,6 +22,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
@@ -35,8 +36,13 @@ from sklearn.model_selection import GridSearchCV, StratifiedKFold, validation_cu
 from sklearn.pipeline import Pipeline
 from sklearn.tree import DecisionTreeClassifier
 
-from src.artifact_utils import index_fingerprint, save_json
-from src.data import DatasetSplit, PROJECT_ROOT, load_and_split_data
+from src.artifact_utils import build_experiment_identity, save_json
+from src.data import (
+    NUMERICAL_FEATURES,
+    DatasetSplit,
+    PROJECT_ROOT,
+    load_and_split_data,
+)
 from src.experiment_contract import (
     DATASET_DISPLAY_PATH,
     DATASET_PATH,
@@ -44,6 +50,7 @@ from src.experiment_contract import (
     POSITIVE_CLASS_NAME,
     RANDOM_STATE,
     SPLIT_STRATEGY,
+    TARGET_MAPPING,
     TEST_SIZE,
 )
 from src.preprocessing import build_model_pipeline
@@ -97,11 +104,14 @@ def load_shared_split() -> DatasetSplit:
     )
 
 
-def build_hau_tree_pipeline() -> Pipeline:
+def build_hau_tree_pipeline(
+    *,
+    numerical_features: Sequence[str] = NUMERICAL_FEATURES,
+) -> Pipeline:
     """Build an unfitted Decision Tree inside Khang's shared preprocessing."""
 
     estimator = DecisionTreeClassifier(random_state=RANDOM_STATE)
-    return build_model_pipeline(estimator)
+    return build_model_pipeline(estimator, numerical_features=numerical_features)
 
 
 def estimator_step_name(pipeline: Pipeline) -> str:
@@ -202,10 +212,11 @@ def run_combined_search(
     search_space: Mapping[str, Sequence[Any]] = COMBINED_SEARCH_SPACE,
     cv: StratifiedKFold | None = None,
     n_jobs: int | None = -1,
+    numerical_features: Sequence[str] = NUMERICAL_FEATURES,
 ) -> GridSearchCV:
     """Fit the combined training-only search and refit its selected pipeline."""
 
-    pipeline = build_hau_tree_pipeline()
+    pipeline = build_hau_tree_pipeline(numerical_features=numerical_features)
     search = GridSearchCV(
         estimator=pipeline,
         param_grid=build_combined_parameter_grid(pipeline, search_space),
@@ -685,6 +696,14 @@ def run_hau_hyperparameter_workflow(
     all_search_results.to_csv(search_results_path, index=False)
 
     best_parameters = selected_parameters(search)
+    experiment_identity = build_experiment_identity(
+        DATASET_PATH,
+        split.X_train.index.to_numpy(),
+        split.X_test.index.to_numpy(),
+        test_size=TEST_SIZE,
+        random_state=RANDOM_STATE,
+        target_mapping=TARGET_MAPPING,
+    )
     best_summary = {
         "best_parameters": best_parameters,
         "best_cv_score": float(search.best_score_),
@@ -700,12 +719,13 @@ def run_hau_hyperparameter_workflow(
         "random_state": RANDOM_STATE,
         "train_rows": int(len(split.y_train)),
         "test_rows": int(len(split.y_test)),
-        "train_indices_sha256": index_fingerprint(split.X_train.index.to_numpy()),
-        "test_indices_sha256": index_fingerprint(split.X_test.index.to_numpy()),
+        "train_indices_sha256": experiment_identity["train_indices_sha256"],
+        "test_indices_sha256": experiment_identity["test_indices_sha256"],
         "preprocessing": "src.preprocessing.build_model_pipeline",
         "preprocessing_cv_fit_scope": "each training fold only",
         "test_partition_usage": "one final evaluation after selection",
         "estimator_step": estimator_step_name(search.best_estimator_),
+        "experiment_identity": experiment_identity,
     }
     best_parameters_path = resolved_results / "hau_best_parameters.json"
     save_json(best_summary, best_parameters_path)
@@ -717,6 +737,9 @@ def run_hau_hyperparameter_workflow(
         split.X_test,
         split.y_test,
     )
+    resolved_trees.mkdir(parents=True, exist_ok=True)
+    tuned_pipeline_path = resolved_trees / "hau_tuned_pipeline.joblib"
+    joblib.dump(search.best_estimator_, tuned_pipeline_path)
     tuned_output = {
         **tuned_metrics,
         "tree_depth": tuned_complexity["depth"],
@@ -767,5 +790,6 @@ def run_hau_hyperparameter_workflow(
         "tuned_metrics_output": str(tuned_metrics_path),
         "comparison_output": str(comparison_path),
         "comparison_figure": str(comparison_figure),
+        "tuned_pipeline": str(tuned_pipeline_path),
         "report": str(resolved_report),
     }

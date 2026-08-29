@@ -1,0 +1,5 @@
+model,reference_model,point_f1_difference,ci_lower,ci_upper,interval_includes_zero
+Hoang Baseline,Trung Weighted + Tuned,-0.1293643735359521,-0.15474552205572736,-0.10264663394953441,False
+Hau Tuned,Trung Weighted + Tuned,-0.07242073784507042,-0.09858929418277809,-0.04804340588247342,False
+Kiet Pruned Entropy,Trung Weighted + Tuned,-0.02852021336601296,-0.051429259358266144,-0.005997399647301372,False
+Trung Weighted + Tuned,Trung Weighted + Tuned,0.0,0.0,0.0,True

@@ -1,4 +1,4 @@
-"""Run the unified Khang, Hoang, Hau, Kiet, and Trung project workflows."""
+"""Run every official workflow and the separate pre-call sensitivity audit."""
 
 from __future__ import annotations
 
@@ -26,14 +26,18 @@ from src.hau_hyperparameter_tuning import (
     run_hau_hyperparameter_workflow,
 )
 from src.preprocessing import build_preprocessing_pipeline, get_encoded_feature_names
+from src.precall_sensitivity import run_precall_sensitivity_workflow
 from src.pruning_experiment import (
     DEFAULT_REPORT as DEFAULT_KIET_REPORT,
     run_pruning_workflow,
 )
+from src.report_tables import REPORT_PATH, render_generated_report_tables
+from src.statistical_comparison import run_statistical_comparison_workflow
 from src.utils import to_pretty_json
 from src.visualization import DEFAULT_FIGURES_DIR, generate_eda_figures
 from src.trung_class_weight import (
     DEFAULT_REPORT as DEFAULT_TRUNG_REPORT,
+    build_team_references,
     run_trung_class_weight_workflow,
 )
 
@@ -150,8 +154,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Reproduce Khang's EDA/preprocessing, Hoang's frozen baseline, "
-            "Hau's hyperparameter tuning, Kiet's pruning experiment, and "
-            "Trung's class-weight comparison from one entry point."
+            "Hau's hyperparameter tuning, the pre-call sensitivity audit, "
+            "Kiet's pruning experiment, and Trung's class-weight comparison "
+            "from one entry point."
         )
     )
     parser.add_argument(
@@ -215,7 +220,8 @@ def main() -> None:
 
     The workflow regenerates Khang's EDA and figures, trains and documents
     Hoang's frozen baseline, tunes Hau's separately owned tree using
-    training-only cross-validation, runs Kiet's pruning experiment, then runs
+    training-only cross-validation, evaluates the fixed configurations without
+    the post-call duration feature, runs Kiet's pruning experiment, then runs
     Trung's class-weight selection and final team comparison with the same split
     and preprocessing contract. Exceptions propagate so failures return a
     non-zero exit status.
@@ -254,17 +260,47 @@ def main() -> None:
         baseline_metrics=baseline_report["metrics"],
         baseline_complexity=baseline_report["tree_statistics"],
     )
+    precall_report = run_precall_sensitivity_workflow(
+        baseline_metrics=baseline_report["metrics"],
+        baseline_complexity=baseline_report["tree_statistics"],
+        tuned_metrics=hau_report["metrics"],
+        tuned_complexity=hau_report["tree_complexity"],
+        tuned_parameters=hau_report["best_parameters"],
+        figures_dir=args.figures_dir,
+        results_dir=args.results_dir,
+        trees_dir=args.trees_dir,
+    )
     kiet_report = run_pruning_workflow(
         figures_dir=args.figures_dir,
         results_dir=args.results_dir,
         trees_dir=args.trees_dir,
         report_path=args.kiet_report,
     )
+    team_references = build_team_references(
+        baseline_metrics=baseline_report["metrics"],
+        baseline_complexity=baseline_report["tree_statistics"],
+        hau_metrics=hau_report["metrics"],
+        hau_complexity=hau_report["tree_complexity"],
+        kiet_model_name=f"Kiet {kiet_report['selected_model']}",
+        kiet_metrics=kiet_report["selected_metrics"],
+        kiet_complexity=kiet_report["selected_complexity"],
+    )
     trung_report = run_trung_class_weight_workflow(
         figures_dir=args.figures_dir,
         results_dir=args.results_dir,
         trees_dir=args.trees_dir,
         report_path=args.trung_report,
+        team_references=team_references,
+        structural_parameters=hau_report["best_parameters"],
+    )
+    uncertainty_report = run_statistical_comparison_workflow(
+        results_dir=args.results_dir,
+        trees_dir=args.trees_dir,
+        shared_dir=args.shared_output_dir,
+    )
+    render_generated_report_tables(
+        report_path=REPORT_PATH,
+        results_dir=args.results_dir,
     )
 
     print(
@@ -273,8 +309,10 @@ def main() -> None:
                 "khang": khang_report,
                 "baseline": baseline_report,
                 "hau": hau_report,
+                "precall_sensitivity": precall_report,
                 "kiet_pruning": kiet_report,
                 "trung_class_weight": trung_report,
+                "statistical_uncertainty": uncertainty_report,
             }
         )
     )

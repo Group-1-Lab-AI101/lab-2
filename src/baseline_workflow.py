@@ -18,23 +18,23 @@ import numpy as np
 import pandas as pd
 import sklearn
 
-from src.artifact_utils import file_sha256, index_fingerprint, save_json
+from src.artifact_utils import build_experiment_identity, save_json
 from src.baseline_tree import (
+    audit_representative_rules,
     baseline_configuration,
-    evaluate_classifier,
     export_full_tree_dot,
     extract_early_splits,
     extract_early_tree_text,
     extract_feature_importance,
     extract_representative_rules,
     extract_tree_statistics,
-    plot_confusion_matrix,
     plot_feature_importance,
     plot_full_tree_structure,
     plot_tree_top_levels,
     train_baseline_tree,
     write_representative_rules,
 )
+from src.evaluation import evaluate_classifier, plot_confusion_matrix
 from src.data import PROJECT_ROOT, load_and_split_data
 from src.experiment_contract import (
     CLASS_DISPLAY_NAMES,
@@ -45,6 +45,7 @@ from src.experiment_contract import (
     RANDOM_STATE,
     SPLIT_STRATEGY,
     TARGET_COLUMN,
+    TARGET_MAPPING,
     TEST_SIZE,
 )
 from src.preprocessing import build_preprocessing_pipeline, get_encoded_feature_names
@@ -183,7 +184,13 @@ def render_baseline_report(
         rule_sections.append(
             f"{index}. IF {conditions}, THEN predict **{rule['predicted_class']}** "
             f"(training support = {rule['sample_count']:,}, purity = {rule['purity']:.3f}, "
-            f"path depth = {rule['depth']})."
+            f"held-out support = {rule['evaluation_sample_count']:,}, held-out purity = "
+            + (
+                f"{rule['evaluation_purity']:.3f}, "
+                if rule["evaluation_purity"] is not None
+                else "not estimable, "
+            )
+            + f"path depth = {rule['depth']})."
         )
     leakage_checks = "\n".join(
         f"- {key.replace('_', ' ').capitalize()}: `{value}`"
@@ -389,6 +396,12 @@ def run_baseline_workflow(
     rules = extract_representative_rules(
         model, feature_names, class_display_names=CLASS_DISPLAY_NAMES
     )
+    rules = audit_representative_rules(
+        model,
+        rules,
+        X_test_processed,
+        split.y_test,
+    )
 
     save_json(metrics, resolved_results / "baseline_metrics.json")
     pd.DataFrame(
@@ -406,6 +419,7 @@ def run_baseline_workflow(
         extract_early_tree_text(model, feature_names), encoding="utf-8"
     )
     write_representative_rules(rules, resolved_trees / "representative_rules.md")
+    save_json({"rules": rules}, resolved_trees / "representative_rules_audit.json")
 
     plot_confusion_matrix(
         split.y_test,
@@ -413,6 +427,7 @@ def run_baseline_workflow(
         model.classes_,
         resolved_figures / "confusion_matrix.png",
         class_display_names=CLASS_DISPLAY_NAMES,
+        title="Baseline Decision Tree - Confusion Matrix",
     )
     plot_tree_top_levels(
         model,
@@ -445,7 +460,15 @@ def run_baseline_workflow(
         test=test_row_indices,
     )
 
-    dataset_sha256 = file_sha256(DATASET_PATH)
+    experiment_identity = build_experiment_identity(
+        DATASET_PATH,
+        train_row_indices,
+        test_row_indices,
+        test_size=TEST_SIZE,
+        random_state=RANDOM_STATE,
+        target_mapping=TARGET_MAPPING,
+    )
+    dataset_sha256 = experiment_identity["dataset_sha256"]
     shared_manifest = {
         "dataset_path": str(DATASET_DISPLAY_PATH),
         "dataset_sha256": dataset_sha256,
@@ -458,8 +481,8 @@ def run_baseline_workflow(
         "stratified_by": TARGET_COLUMN,
         "train_rows": int(len(split.y_train)),
         "test_rows": int(len(split.y_test)),
-        "train_indices_sha256": index_fingerprint(train_row_indices),
-        "test_indices_sha256": index_fingerprint(test_row_indices),
+        "train_indices_sha256": experiment_identity["train_indices_sha256"],
+        "test_indices_sha256": experiment_identity["test_indices_sha256"],
         "categorical_encoding": "OneHotEncoder(handle_unknown='ignore', sparse_output=True)",
         "numeric_processing": "passthrough",
         "preprocessor_fit_partition": "training only",
@@ -467,6 +490,7 @@ def run_baseline_workflow(
         "shared_preprocessing_entry_point": "src.preprocessing.build_preprocessing_pipeline",
         "target_mapping": {"no": 0, "yes": 1},
         "transformed_feature_names": feature_names.tolist(),
+        "experiment_identity": experiment_identity,
     }
     save_json(shared_manifest, resolved_shared_output / "split_manifest.json")
 
@@ -486,6 +510,7 @@ def run_baseline_workflow(
         "positive_label": POSITIVE_CLASS_NAME,
         "positive_label_encoded_value": POSITIVE_CLASS,
         "configuration": configuration,
+        "experiment_identity": experiment_identity,
         "versions": {
             "python": platform.python_version(),
             "pandas": pd.__version__,

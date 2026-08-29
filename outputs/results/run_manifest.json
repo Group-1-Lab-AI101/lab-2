@@ -17,6 +17,17 @@
   "dataset_path": "data/bank-full.csv",
   "dataset_rows": 45211,
   "dataset_sha256": "d1513ec63b385506f7cfce9f2c5caa9fe99e7ba4e8c3fa264b3aaf0f849ed32d",
+  "experiment_identity": {
+    "dataset_sha256": "d1513ec63b385506f7cfce9f2c5caa9fe99e7ba4e8c3fa264b3aaf0f849ed32d",
+    "random_state": 42,
+    "target_mapping": {
+      "no": 0,
+      "yes": 1
+    },
+    "test_indices_sha256": "c1c3c7f5f45b5ba6159c45650c2f59b8270c4314b3e403e8a549f9047d292055",
+    "test_size": 0.2,
+    "train_indices_sha256": "b078ac348228f8e49c30af463dc1198fb5e8e11d6379e5d842caf580fc728469"
+  },
   "positive_label": "yes",
   "positive_label_encoded_value": 1,
   "random_state": 42,
@@ -30,9 +41,9 @@
   "transformed_features": 51,
   "versions": {
     "joblib": "1.5.3",
-    "matplotlib": "3.10.8",
-    "pandas": "2.3.3",
-    "python": "3.13.11",
-    "scikit_learn": "1.8.0"
+    "matplotlib": "3.11.1",
+    "pandas": "3.0.5",
+    "python": "3.14.4",
+    "scikit_learn": "1.9.0"
   }
 }

@@ -13,6 +13,7 @@ These are selected high-support leaf paths from the fitted baseline. They are de
 - marital is not 'divorced'
 
 Leaf support: 76 training rows; leaf purity: 1.000; path depth: 7.
+Held-out support: 23 rows; held-out purity: 1.000.
 
 ## Rule 2: predict `no`
 
@@ -28,6 +29,7 @@ Leaf support: 76 training rows; leaf purity: 1.000; path depth: 7.
 - month is not 'oct'
 
 Leaf support: 46 training rows; leaf purity: 1.000; path depth: 10.
+Held-out support: 7 rows; held-out purity: 0.714.
 
 ## Rule 3: predict `yes`
 
@@ -41,6 +43,7 @@ Leaf support: 46 training rows; leaf purity: 1.000; path depth: 10.
 - education is not 'unknown'
 
 Leaf support: 55 training rows; leaf purity: 1.000; path depth: 8.
+Held-out support: 21 rows; held-out purity: 0.810.
 
 ## Rule 4: predict `yes`
 
@@ -52,3 +55,4 @@ Leaf support: 55 training rows; leaf purity: 1.000; path depth: 8.
 - day > 8.000
 
 Leaf support: 24 training rows; leaf purity: 1.000; path depth: 6.
+Held-out support: 5 rows; held-out purity: 0.600.

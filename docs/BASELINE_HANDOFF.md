@@ -115,6 +115,7 @@ rerun; results from different splits or encoders must not be compared.
 ## Shared infrastructure
 
 - `src/data.py`, `src/preprocessing.py`, `src/eda.py`, `src/visualization.py`;
+- `src/evaluation.py` for metrics and confusion-matrix rendering shared by all models;
 - `src/experiment_contract.py` and `src/artifact_utils.py`;
 - `tests/test_khang_pipeline.py` plus shared integration assertions in
   `tests/test_baseline.py`;
@@ -129,10 +130,14 @@ rerun; results from different splits or encoders must not be compared.
   `outputs/results/`, tree/model exports in `outputs/trees/`, and
   baseline-specific tests.
 
-## Code that should not exist yet
+## Experiment modules built on the contract
 
-None. There is no tuning search, alternative estimator experiment, pruning,
-class-weight experiment, or final comparison implementation.
+- `src/hau_hyperparameter_tuning.py`: structural search selected by F1-CV;
+- `src/pruning_experiment.py`: F1-CV selection of `criterion` and `ccp_alpha`;
+- `src/trung_class_weight.py`: structurally regularized class-weight search and comparison;
+- `src/precall_sensitivity.py`: duration-free ablation and retuning;
+- `src/statistical_comparison.py`: paired stratified bootstrap uncertainty;
+- `src/report_tables.py`: artifact-backed generated blocks in `REPORT.md`.
 
 # Files Future Members Must Not Modify
 
@@ -146,13 +151,21 @@ class-weight experiment, or final comparison implementation.
 
 The audits verify disjoint train/test indices, target exclusion, training-only
 preprocessor fitting, feature-name alignment, and probability-based ROC-AUC.
-Compatible dependency ranges are in `requirements.txt`; exact executed versions
-are recorded in `outputs/results/run_manifest.json`.
+Compatible runtime dependency ranges are in `requirements.txt`; notebook tools
+are layered on by `requirements-notebook.txt`. The complete executed environment
+is pinned in `requirements-lock.txt`, and core versions are also recorded in
+`outputs/results/run_manifest.json`.
 
 `duration` is known only after a marketing call finishes. Keeping it matches the
 selected dataset baseline, but it is unavailable for pre-call prediction. This
 is a deployment-time concern, not train/test leakage; all team models must treat
 the feature consistently.
+
+`src/precall_sensitivity.py` is the explicit exception for deployment analysis:
+it first holds baseline/Hau configurations fixed to isolate removal of
+`duration`, then reruns Hau's full training-only search on the duration-free
+schema. It stores these results separately and does not mix them into the
+post-call team comparison.
 
 Reproduce both shared and baseline outputs:
 

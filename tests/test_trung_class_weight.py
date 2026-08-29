@@ -8,6 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pandas as pd
+
 from src.artifact_utils import index_fingerprint
 from src.trung_class_weight import (
     build_trung_tree_pipeline,
@@ -15,6 +17,7 @@ from src.trung_class_weight import (
     make_cv_strategy,
     run_class_weight_validation,
     run_trung_class_weight_workflow,
+    selected_candidate_position,
     select_best_class_weight,
 )
 
@@ -58,6 +61,21 @@ class TrungClassWeightTests(unittest.TestCase):
         self.assertEqual(parameters["min_samples_leaf"], 1)
         self.assertEqual(parameters["ccp_alpha"], 0.0)
 
+    def test_weighting_can_be_combined_with_preselected_structure(self) -> None:
+        pipeline = build_trung_tree_pipeline(
+            {0: 1.0, 1: 2.0},
+            structural_parameters={
+                "max_depth": 7,
+                "min_samples_split": 20,
+                "min_samples_leaf": 5,
+            },
+        )
+        parameters = pipeline.named_steps["model"].get_params(deep=False)
+        self.assertEqual(parameters["class_weight"], {0: 1.0, 1: 2.0})
+        self.assertEqual(parameters["max_depth"], 7)
+        self.assertEqual(parameters["min_samples_split"], 20)
+        self.assertEqual(parameters["min_samples_leaf"], 5)
+
     def test_validation_has_no_test_partition_argument(self) -> None:
         parameters = set(inspect.signature(run_class_weight_validation).parameters)
         self.assertNotIn("X_test", parameters)
@@ -80,6 +98,26 @@ class TrungClassWeightTests(unittest.TestCase):
             self.assertTrue(
                 self.validation[f"mean_cv_{metric}"].between(0.0, 1.0).all()
             )
+
+    def test_plot_position_uses_the_selectors_complete_tie_break(self) -> None:
+        validation = pd.DataFrame(
+            [
+                {"candidate_order": 0, "mean_cv_f1": 0.5, "mean_cv_recall": 0.4},
+                {"candidate_order": 1, "mean_cv_f1": 0.5, "mean_cv_recall": 0.6},
+                {"candidate_order": 2, "mean_cv_f1": 0.4, "mean_cv_recall": 0.8},
+            ],
+            index=[10, 20, 30],
+        )
+        candidates = (None, "balanced", {0: 1.0, 1: 2.0})
+
+        _, selected = select_best_class_weight(validation, candidates)
+        position = selected_candidate_position(
+            validation,
+            int(selected["candidate_order"]),
+        )
+
+        self.assertEqual(selected["candidate_order"], 1)
+        self.assertEqual(position, 1)
 
     def test_pipeline_ignores_a_test_only_category(self) -> None:
         pipeline = build_trung_tree_pipeline("balanced")
@@ -162,7 +200,14 @@ class TrungClassWeightTests(unittest.TestCase):
         )
         self.assertTrue(all(cell["execution_count"] is not None for cell in code_cells))
         self.assertEqual(errors, [])
-        for required in ("Trung", "class_weight", "Comparison of Results", "Conclusion"):
+        for required in (
+            "Trung",
+            "class_weight",
+            "structural_parameters",
+            "Trung Weighted + Tuned",
+            "Comparison of Results",
+            "Conclusion",
+        ):
             self.assertIn(required, content)
 
 

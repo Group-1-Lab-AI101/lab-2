@@ -23,16 +23,22 @@ from sklearn.model_selection import StratifiedKFold, cross_validate
 from sklearn.pipeline import Pipeline
 from sklearn.tree import DecisionTreeClassifier
 
-from src.artifact_utils import index_fingerprint, save_json
-from src.baseline_tree import evaluate_classifier, plot_confusion_matrix
+from src.artifact_utils import (
+    build_experiment_identity,
+    save_json,
+    validate_experiment_identity,
+)
 from src.data import PROJECT_ROOT, DatasetSplit, load_and_split_data
+from src.evaluation import evaluate_classifier, plot_confusion_matrix
 from src.experiment_contract import (
     CLASS_DISPLAY_NAMES,
     DATASET_DISPLAY_PATH,
+    DATASET_PATH,
     FROZEN_BASELINE_PARAMETERS,
     POSITIVE_CLASS,
     POSITIVE_CLASS_NAME,
     RANDOM_STATE,
+    TARGET_MAPPING,
     TEST_SIZE,
 )
 from src.preprocessing import build_model_pipeline
@@ -72,10 +78,20 @@ def class_weight_label(class_weight: Any) -> str:
     return f"no=1, yes={float(class_weight[1]):g}"
 
 
-def build_trung_tree_pipeline(class_weight: Any = None) -> Pipeline:
-    """Build a baseline-equivalent tree that changes only ``class_weight``."""
+def build_trung_tree_pipeline(
+    class_weight: Any = None,
+    *,
+    structural_parameters: Mapping[str, Any] | None = None,
+) -> Pipeline:
+    """Build a weighted tree, optionally on a preselected structural setting."""
 
     parameters = dict(FROZEN_BASELINE_PARAMETERS)
+    supplied = dict(structural_parameters or {})
+    allowed = {"max_depth", "min_samples_split", "min_samples_leaf", "ccp_alpha"}
+    unexpected = set(supplied).difference(allowed)
+    if unexpected:
+        raise ValueError(f"Unsupported structural parameters: {sorted(unexpected)}")
+    parameters.update(supplied)
     parameters["class_weight"] = class_weight
     return build_model_pipeline(DecisionTreeClassifier(**parameters))
 
@@ -99,6 +115,7 @@ def run_class_weight_validation(
     candidates: Sequence[Any] = CLASS_WEIGHT_CANDIDATES,
     cv: StratifiedKFold | None = None,
     n_jobs: int | None = -1,
+    structural_parameters: Mapping[str, Any] | None = None,
 ) -> pd.DataFrame:
     """Evaluate class weights using fold-local preprocessing and no test data."""
 
@@ -115,7 +132,10 @@ def run_class_weight_validation(
     rows: list[dict[str, Any]] = []
     for rank, class_weight in enumerate(candidates):
         scores = cross_validate(
-            build_trung_tree_pipeline(class_weight),
+            build_trung_tree_pipeline(
+                class_weight,
+                structural_parameters=structural_parameters,
+            ),
             X_train,
             y_train,
             scoring=scoring,
@@ -193,11 +213,19 @@ def _load_metric_csv(path: Path) -> dict[str, Any]:
 def load_team_references(
     results_dir: str | Path = DEFAULT_RESULTS_OUTPUT,
     trees_dir: str | Path = DEFAULT_TREES_OUTPUT,
+    *,
+    expected_identity: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
-    """Load the frozen, tuned, and validation-selected pruning references."""
+    """Load references only after proving they share the current experiment."""
 
     results = Path(results_dir).resolve()
     trees = Path(trees_dir).resolve()
+    baseline_manifest = json.loads(
+        (results / "run_manifest.json").read_text(encoding="utf-8")
+    )
+    hau_summary = json.loads(
+        (results / "hau_best_parameters.json").read_text(encoding="utf-8")
+    )
     baseline_metrics = json.loads(
         (results / "baseline_metrics.json").read_text(encoding="utf-8")
     )
@@ -208,11 +236,48 @@ def load_team_references(
     kiet_payload = json.loads(
         (results / "kiet_pruning_metrics.json").read_text(encoding="utf-8")
     )
+    for artifact_name, payload in (
+        ("baseline run manifest", baseline_manifest),
+        ("Hau best-parameters artifact", hau_summary),
+        ("Kiet pruning artifact", kiet_payload),
+    ):
+        validate_experiment_identity(
+            expected_identity,
+            payload.get("experiment_identity"),
+            artifact_name=artifact_name,
+        )
     selected_kiet = next(
         row
         for row in kiet_payload["comparison"]
         if row["model"] == kiet_payload["selected_model"]
     )
+    return build_team_references(
+        baseline_metrics=baseline_metrics,
+        baseline_complexity=baseline_complexity,
+        hau_metrics={key: float(hau[key]) for key in _metric_keys()},
+        hau_complexity={
+            "depth": int(float(hau["tree_depth"])),
+            "leaves": int(float(hau["number_of_leaves"])),
+            "nodes": int(float(hau["node_count"])),
+        },
+        kiet_model_name=f"Kiet Pruned {kiet_payload['selected_criterion'].title()}",
+        kiet_metrics=selected_kiet,
+        kiet_complexity=selected_kiet,
+    )
+
+
+def build_team_references(
+    *,
+    baseline_metrics: Mapping[str, Any],
+    baseline_complexity: Mapping[str, Any],
+    hau_metrics: Mapping[str, Any],
+    hau_complexity: Mapping[str, Any],
+    kiet_model_name: str,
+    kiet_metrics: Mapping[str, Any],
+    kiet_complexity: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """Build comparison records from already verified in-memory results."""
+
     return [
         {
             "Model": "Hoang Baseline",
@@ -221,15 +286,13 @@ def load_team_references(
         },
         {
             "Model": "Hau Tuned",
-            **{key: float(hau[key]) for key in _metric_keys()},
-            "depth": int(float(hau["tree_depth"])),
-            "leaves": int(float(hau["number_of_leaves"])),
-            "nodes": int(float(hau["node_count"])),
+            **{key: float(hau_metrics[key]) for key in _metric_keys()},
+            **{key: int(hau_complexity[key]) for key in _complexity_keys()},
         },
         {
-            "Model": f"Kiet Pruned {kiet_payload['selected_criterion'].title()}",
-            **{key: selected_kiet[key] for key in _metric_keys()},
-            **{key: selected_kiet[key] for key in _complexity_keys()},
+            "Model": kiet_model_name,
+            **{key: kiet_metrics[key] for key in _metric_keys()},
+            **{key: int(kiet_complexity[key]) for key in _complexity_keys()},
         },
     ]
 
@@ -246,13 +309,15 @@ def build_team_comparison_table(
     references: Sequence[Mapping[str, Any]],
     weighted_metrics: Mapping[str, Any],
     weighted_complexity: Mapping[str, Any],
+    *,
+    weighted_model_name: str = "Trung Class Weight",
 ) -> pd.DataFrame:
     """Combine the official model from each member into one final table."""
 
     rows = [dict(reference) for reference in references]
     rows.append(
         {
-            "Model": "Trung Class Weight",
+            "Model": weighted_model_name,
             **{key: weighted_metrics[key] for key in _metric_keys()},
             **{key: weighted_complexity[key] for key in _complexity_keys()},
         }
@@ -260,7 +325,31 @@ def build_team_comparison_table(
     return pd.DataFrame(rows)
 
 
-def plot_class_weight_validation(validation: pd.DataFrame, output_path: Path) -> None:
+def selected_candidate_position(
+    validation: pd.DataFrame,
+    selected_candidate_order: int,
+) -> int:
+    """Map the selector's stable candidate identity to its plotted position."""
+
+    if "candidate_order" not in validation:
+        raise ValueError("Validation table is missing candidate_order.")
+    selected_matches = np.flatnonzero(
+        validation["candidate_order"].to_numpy(dtype=int)
+        == int(selected_candidate_order)
+    )
+    if len(selected_matches) != 1:
+        raise ValueError(
+            "selected_candidate_order must identify exactly one validation row."
+        )
+    return int(selected_matches[0])
+
+
+def plot_class_weight_validation(
+    validation: pd.DataFrame,
+    output_path: Path,
+    *,
+    selected_candidate_order: int,
+) -> None:
     """Plot CV precision, recall, and F1 for every class-weight candidate."""
 
     positions = np.arange(len(validation))
@@ -274,16 +363,20 @@ def plot_class_weight_validation(validation: pd.DataFrame, output_path: Path) ->
             label=metric.title(),
             color=color,
         )
-    selected_index = int(validation["mean_cv_f1"].idxmax())
+    selected_position = selected_candidate_position(
+        validation,
+        selected_candidate_order,
+    )
+    selected_score = float(validation.iloc[selected_position]["mean_cv_f1"])
     axis.scatter(
-        [selected_index],
-        [validation.loc[selected_index, "mean_cv_f1"]],
+        [selected_position],
+        [selected_score],
         marker="*",
         s=220,
         color="#DC2626",
         edgecolor="black",
         linewidth=0.5,
-        label="Selected by F1",
+        label="Selected by F1/Recall tie-break",
         zorder=5,
     )
     axis.set_xticks(positions, validation["class_weight_label"], rotation=25, ha="right")
@@ -335,6 +428,7 @@ def render_trung_report(
     metrics: Mapping[str, Any],
     complexity: Mapping[str, Any],
     comparison: pd.DataFrame,
+    structural_parameters: Mapping[str, Any] | None = None,
 ) -> None:
     """Write Trung's method, team comparison, and final conclusion."""
 
@@ -348,11 +442,19 @@ def render_trung_report(
     baseline = comparison.iloc[0]
     recall_delta = metrics["recall"] - baseline["recall"]
     f1_delta = metrics["f1_score"] - baseline["f1_score"]
+    structural_note = (
+        "The class weights are evaluated on Hau's training-CV-selected structural "
+        f"controls (`{dict(structural_parameters)}`), so the final model addresses "
+        "both variance and class imbalance. The structural values were fixed before "
+        "this weight search."
+        if structural_parameters
+        else "This controlled experiment changes only `class_weight` from the frozen baseline."
+    )
     report = f"""# Improvement Method 3 - Class Weight and Final Conclusion
 
 ## Mục tiêu
 
-Phần này do **Trung** phụ trách. Dataset có lớp `yes` thiểu số, vì vậy Accuracy có thể che khuất việc mô hình bỏ sót khách hàng đăng ký tiền gửi. Thí nghiệm thay đổi duy nhất tham số `class_weight` của frozen baseline để tăng chi phí phân loại sai lớp `yes`.
+Phần này do **Trung** phụ trách. Dataset có lớp `yes` thiểu số, vì vậy Accuracy có thể che khuất việc mô hình bỏ sót khách hàng đăng ký tiền gửi. Thí nghiệm tìm `class_weight` để tăng chi phí phân loại sai lớp `yes`. {structural_note}
 
 ## Thiết kế thí nghiệm
 
@@ -408,6 +510,7 @@ def run_trung_class_weight_workflow(
     cv_folds: int = CV_FOLDS,
     n_jobs: int | None = -1,
     team_references: Sequence[Mapping[str, Any]] | None = None,
+    structural_parameters: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run Trung's validation, final evaluation, and team comparison workflow."""
 
@@ -419,19 +522,34 @@ def run_trung_class_weight_workflow(
         directory.mkdir(parents=True, exist_ok=True)
 
     split = load_shared_split()
+    experiment_identity = build_experiment_identity(
+        DATASET_PATH,
+        split.X_train.index.to_numpy(),
+        split.X_test.index.to_numpy(),
+        test_size=TEST_SIZE,
+        random_state=RANDOM_STATE,
+        target_mapping=TARGET_MAPPING,
+    )
     validation = run_class_weight_validation(
         split.X_train,
         split.y_train,
         candidates=candidates,
         cv=make_cv_strategy(cv_folds),
         n_jobs=n_jobs,
+        structural_parameters=structural_parameters,
     )
     validation_path = results / "trung_class_weight_validation.csv"
     validation.to_csv(validation_path, index=False)
-    plot_class_weight_validation(validation, figures / "trung_class_weight_validation.png")
-
     selected_weight, selected_validation = select_best_class_weight(validation, candidates)
-    selected_pipeline = build_trung_tree_pipeline(selected_weight)
+    plot_class_weight_validation(
+        validation,
+        figures / "trung_class_weight_validation.png",
+        selected_candidate_order=int(selected_validation["candidate_order"]),
+    )
+    selected_pipeline = build_trung_tree_pipeline(
+        selected_weight,
+        structural_parameters=structural_parameters,
+    )
     selected_pipeline.fit(split.X_train, split.y_train)
     metrics, classification, predictions, complexity = evaluate_weighted_pipeline(
         selected_pipeline, split
@@ -448,15 +566,30 @@ def run_trung_class_weight_workflow(
         selected_pipeline.classes_,
         figures / "trung_confusion_matrix.png",
         class_display_names=CLASS_DISPLAY_NAMES,
+        title="Weighted + Tuned Decision Tree - Confusion Matrix",
     )
     joblib.dump(selected_pipeline, trees / "trung_weighted_pipeline.joblib")
 
     references = (
         list(team_references)
         if team_references is not None
-        else load_team_references(results, trees)
+        else load_team_references(
+            results,
+            trees,
+            expected_identity=experiment_identity,
+        )
     )
-    comparison = build_team_comparison_table(references, metrics, complexity)
+    weighted_model_name = (
+        "Trung Weighted + Tuned"
+        if structural_parameters
+        else "Trung Class Weight"
+    )
+    comparison = build_team_comparison_table(
+        references,
+        metrics,
+        complexity,
+        weighted_model_name=weighted_model_name,
+    )
     comparison.to_csv(results / "team_model_comparison.csv", index=False)
     plot_team_comparison(comparison, figures / "team_model_comparison.png")
 
@@ -468,11 +601,15 @@ def run_trung_class_weight_workflow(
         "selected_class_weight": selected_weight,
         "selected_class_weight_label": class_weight_label(selected_weight),
         "selected_validation": selected_validation,
+        "structural_parameters_fixed_before_weight_search": dict(
+            structural_parameters or {}
+        ),
         "metrics": metrics,
         "tree_complexity": complexity,
-        "train_indices_sha256": index_fingerprint(split.X_train.index.to_numpy()),
-        "test_indices_sha256": index_fingerprint(split.X_test.index.to_numpy()),
+        "train_indices_sha256": experiment_identity["train_indices_sha256"],
+        "test_indices_sha256": experiment_identity["test_indices_sha256"],
         "test_partition_usage": "one final evaluation after selection",
+        "experiment_identity": experiment_identity,
     }
     save_json(summary, results / "trung_best_class_weight.json")
     render_trung_report(
@@ -483,11 +620,13 @@ def run_trung_class_weight_workflow(
         metrics=metrics,
         complexity=complexity,
         comparison=comparison,
+        structural_parameters=structural_parameters,
     )
 
     return {
         "selected_class_weight": selected_weight,
         "selected_class_weight_label": class_weight_label(selected_weight),
+        "structural_parameters": dict(structural_parameters or {}),
         "metrics": metrics,
         "tree_complexity": complexity,
         "validation_output": str(validation_path),

@@ -1,8 +1,9 @@
 """Kiet's cost-complexity pruning and split-criterion experiment.
 
-The experiment keeps the group's official train/test split unchanged. Candidate
-``ccp_alpha`` values are selected on an inner validation partition of the
-official training data, so the held-out test labels do not influence tuning.
+The experiment keeps the group's official train/test split unchanged. Both
+``criterion`` and ``ccp_alpha`` are selected by positive-class F1 under
+stratified cross-validation on the official training partition. The held-out
+test labels never influence tuning.
 """
 
 from __future__ import annotations
@@ -18,27 +19,36 @@ import joblib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import f1_score
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
 from sklearn.tree import DecisionTreeClassifier, export_graphviz, plot_tree
 
-from src.artifact_utils import index_fingerprint, save_json
-from src.baseline_tree import evaluate_classifier
+from src.artifact_utils import build_experiment_identity, save_json
 from src.data import PROJECT_ROOT, load_and_split_data
+from src.evaluation import evaluate_classifier
 from src.experiment_contract import (
     CLASS_DISPLAY_NAMES,
+    DATASET_PATH,
     FROZEN_BASELINE_PARAMETERS,
     POSITIVE_CLASS,
     POSITIVE_CLASS_NAME,
     RANDOM_STATE,
+    TARGET_MAPPING,
     TEST_SIZE,
 )
-from src.preprocessing import build_preprocessing_pipeline, get_encoded_feature_names
+from src.preprocessing import (
+    build_model_pipeline,
+    build_preprocessing_pipeline,
+    get_encoded_feature_names,
+)
 
 
 CRITERIA = ("gini", "entropy")
-INNER_VALIDATION_SIZE = 0.20
+CV_FOLDS = 5
+SCORING_METRIC = "f1"
 MAX_ALPHA_CANDIDATES = 40
+MIN_POSITIVE_ALPHA = 1e-6
+MAX_POSITIVE_ALPHA = 5e-3
 
 DEFAULT_FIGURES_OUTPUT = PROJECT_ROOT / "outputs" / "figures"
 DEFAULT_RESULTS_OUTPUT = PROJECT_ROOT / "outputs" / "results"
@@ -93,52 +103,110 @@ def sample_ccp_alphas(
     return np.concatenate(([0.0], selected_positive)).astype(float)
 
 
+def make_ccp_alpha_grid(
+    *,
+    max_candidates: int = MAX_ALPHA_CANDIDATES,
+) -> np.ndarray:
+    """Create a fixed, label-independent alpha grid for unbiased CV selection."""
+
+    if max_candidates < 2:
+        raise ValueError("max_candidates must be at least 2.")
+    positive = np.geomspace(
+        MIN_POSITIVE_ALPHA,
+        MAX_POSITIVE_ALPHA,
+        num=max_candidates - 1,
+    )
+    return np.concatenate(([0.0], positive)).astype(float)
+
+
+def make_cv_strategy(n_splits: int = CV_FOLDS) -> StratifiedKFold:
+    """Build the deterministic stratified folds used for pruning selection."""
+
+    if n_splits < 2:
+        raise ValueError("Cross-validation requires at least two folds.")
+    return StratifiedKFold(
+        n_splits=n_splits,
+        shuffle=True,
+        random_state=RANDOM_STATE,
+    )
+
+
 def evaluate_pruning_candidates(
-    X_fit: Any,
-    y_fit: Sequence[Any],
-    X_validation: Any,
-    y_validation: Sequence[Any],
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    X_train_processed: Any,
     *,
     criterion: str,
+    cv: StratifiedKFold | None = None,
     max_candidates: int = MAX_ALPHA_CANDIDATES,
+    n_jobs: int | None = -1,
 ) -> pd.DataFrame:
-    """Fit and score sampled subtrees for one split criterion."""
+    """Score a fixed alpha grid with fold-local preprocessing and five metrics."""
 
-    unpruned = DecisionTreeClassifier(**tree_parameters(criterion, 0.0))
-    path = unpruned.cost_complexity_pruning_path(X_fit, y_fit)
-    alphas = sample_ccp_alphas(path.ccp_alphas, max_candidates=max_candidates)
+    if criterion not in CRITERIA:
+        raise ValueError(f"criterion must be one of {CRITERIA}, got {criterion!r}.")
+    alphas = make_ccp_alpha_grid(max_candidates=max_candidates)
+    pipeline = build_model_pipeline(
+        DecisionTreeClassifier(**tree_parameters(criterion, 0.0))
+    )
+    scoring = {
+        "accuracy": "accuracy",
+        "precision": "precision",
+        "recall": "recall",
+        "f1": "f1",
+        "roc_auc": "roc_auc",
+    }
+    search = GridSearchCV(
+        estimator=pipeline,
+        param_grid={"model__ccp_alpha": alphas.tolist()},
+        scoring=scoring,
+        refit=False,
+        cv=cv or make_cv_strategy(),
+        n_jobs=n_jobs,
+        return_train_score=True,
+        error_score="raise",
+    )
+    search.fit(X_train, y_train)
 
     rows: list[dict[str, Any]] = []
-    for alpha in alphas:
+    for index, alpha in enumerate(alphas):
         model = DecisionTreeClassifier(**tree_parameters(criterion, float(alpha)))
-        model.fit(X_fit, y_fit)
-        fit_accuracy = accuracy_score(y_fit, model.predict(X_fit))
-        validation_accuracy = accuracy_score(
-            y_validation, model.predict(X_validation)
+        model.fit(X_train_processed, y_train)
+        row: dict[str, Any] = {
+            "criterion": criterion,
+            "candidate_order": index,
+            "ccp_alpha": float(alpha),
+            "full_train_f1": float(
+                f1_score(y_train, model.predict(X_train_processed), zero_division=0)
+            ),
+            "cv_folds": int(search.n_splits_),
+            "depth": int(model.get_depth()),
+            "leaves": int(model.get_n_leaves()),
+            "nodes": int(model.tree_.node_count),
+        }
+        for metric in scoring:
+            row[f"mean_cv_{metric}"] = float(
+                search.cv_results_[f"mean_test_{metric}"][index]
+            )
+            row[f"std_cv_{metric}"] = float(
+                search.cv_results_[f"std_test_{metric}"][index]
+            )
+        row["cv_error_rate"] = float(1.0 - row["mean_cv_accuracy"])
+        row["train_cv_f1_gap"] = float(
+            search.cv_results_["mean_train_f1"][index] - row["mean_cv_f1"]
         )
-        rows.append(
-            {
-                "criterion": criterion,
-                "ccp_alpha": float(alpha),
-                "fit_accuracy": float(fit_accuracy),
-                "validation_accuracy": float(validation_accuracy),
-                "validation_error_rate": float(1.0 - validation_accuracy),
-                "train_validation_gap": float(fit_accuracy - validation_accuracy),
-                "depth": int(model.get_depth()),
-                "leaves": int(model.get_n_leaves()),
-                "nodes": int(model.tree_.node_count),
-            }
-        )
+        rows.append(row)
     return pd.DataFrame(rows)
 
 
 def select_best_pruned_candidate(candidates: pd.DataFrame) -> dict[str, Any]:
-    """Choose the most accurate positive-alpha model, preferring simpler ties."""
+    """Choose highest positive-class CV F1, then recall and simpler trees."""
 
     required = {
         "criterion",
         "ccp_alpha",
-        "validation_accuracy",
+        "mean_cv_f1",
+        "mean_cv_recall",
         "leaves",
         "nodes",
     }
@@ -150,8 +218,8 @@ def select_best_pruned_candidate(candidates: pd.DataFrame) -> dict[str, Any]:
     if pruned.empty:
         raise ValueError("At least one positive ccp_alpha candidate is required.")
     ordered = pruned.sort_values(
-        ["validation_accuracy", "leaves", "nodes", "ccp_alpha"],
-        ascending=[False, True, True, True],
+        ["mean_cv_f1", "mean_cv_recall", "leaves", "nodes", "ccp_alpha"],
+        ascending=[False, False, True, True, True],
         kind="mergesort",
     )
     record = ordered.iloc[0].to_dict()
@@ -167,7 +235,7 @@ def _model_record(
     model: DecisionTreeClassifier,
     criterion: str,
     ccp_alpha: float,
-    validation_accuracy: float,
+    validation_f1: float,
     metrics: dict[str, Any],
     baseline_leaves: int,
 ) -> dict[str, Any]:
@@ -178,7 +246,7 @@ def _model_record(
         "model": model_name,
         "criterion": criterion,
         "ccp_alpha": float(ccp_alpha),
-        "validation_accuracy": float(validation_accuracy),
+        "validation_f1": float(validation_f1),
         "accuracy": float(metrics["accuracy"]),
         "error_rate": float(metrics["error_rate"]),
         "precision": float(metrics["precision"]),
@@ -207,7 +275,7 @@ def plot_pruning_tradeoff(candidates: pd.DataFrame, output_path: str | Path) -> 
         color = colors[criterion]
         axes[0].plot(
             group["leaves"],
-            group["validation_accuracy"],
+            group["mean_cv_f1"],
             marker="o",
             markersize=3,
             linewidth=1.2,
@@ -217,7 +285,7 @@ def plot_pruning_tradeoff(candidates: pd.DataFrame, output_path: str | Path) -> 
         )
         axes[0].scatter(
             [selected["leaves"]],
-            [selected["validation_accuracy"]],
+            [selected["mean_cv_f1"]],
             marker="*",
             s=170,
             color=color,
@@ -227,7 +295,7 @@ def plot_pruning_tradeoff(candidates: pd.DataFrame, output_path: str | Path) -> 
         )
         axes[1].plot(
             group["ccp_alpha"],
-            group["validation_accuracy"],
+            group["mean_cv_f1"],
             marker="o",
             markersize=3,
             linewidth=1.2,
@@ -237,7 +305,7 @@ def plot_pruning_tradeoff(candidates: pd.DataFrame, output_path: str | Path) -> 
         )
         axes[1].scatter(
             [selected["ccp_alpha"]],
-            [selected["validation_accuracy"]],
+            [selected["mean_cv_f1"]],
             marker="*",
             s=170,
             color=color,
@@ -248,14 +316,14 @@ def plot_pruning_tradeoff(candidates: pd.DataFrame, output_path: str | Path) -> 
 
     axes[0].set_xscale("log")
     axes[0].set_xlabel("Number of leaves (log scale)")
-    axes[0].set_ylabel("Inner-validation accuracy")
+    axes[0].set_ylabel("Mean stratified-CV F1 (yes)")
     axes[0].set_title("Performance versus tree size")
     axes[0].grid(alpha=0.2)
     axes[0].legend(title="Criterion")
 
     axes[1].set_xscale("symlog", linthresh=1e-8)
     axes[1].set_xlabel("ccp_alpha (symlog scale)")
-    axes[1].set_ylabel("Inner-validation accuracy")
+    axes[1].set_ylabel("Mean stratified-CV F1 (yes)")
     axes[1].set_title("Performance versus pruning strength")
     axes[1].grid(alpha=0.2)
     axes[1].legend(title="Criterion")
@@ -332,8 +400,8 @@ def render_pruning_report(
     comparison: pd.DataFrame,
     selected_by_criterion: dict[str, dict[str, Any]],
     selected_criterion: str,
-    inner_fit_rows: int,
-    inner_validation_rows: int,
+    cv_folds: int,
+    official_train_rows: int,
 ) -> None:
     """Write Kiet's report-ready Vietnamese Markdown section from measured data."""
 
@@ -353,9 +421,9 @@ def render_pruning_report(
     selection_rows = "\n".join(
         (
             f"| {criterion.title()} | {selection['ccp_alpha']:.8g} | "
-            f"{selection['fit_accuracy']:.6f} | "
-            f"{selection['validation_accuracy']:.6f} | "
-            f"{selection['validation_error_rate']:.6f} | "
+            f"{selection['mean_cv_f1']:.6f} | "
+            f"{selection['std_cv_f1']:.6f} | "
+            f"{selection['mean_cv_recall']:.6f} | "
             f"{int(selection['depth'])} | {int(selection['leaves']):,} | "
             f"{int(selection['nodes']):,} |"
         )
@@ -384,18 +452,18 @@ Phần này do **Thái Kiệt** phụ trách. Mục tiêu là giảm hiện tư�
 
 - Giữ nguyên dataset, target `no=0`/`yes=1`, stratified train/test 80%/20% và `random_state=42` của nhóm.
 - Tập test chính thức gồm 9,043 dòng được giữ nguyên cho đánh giá cuối; không dùng để chọn `ccp_alpha` hay tiêu chí tách.
-- Tập train chính thức được chia tiếp theo stratified split thành {inner_fit_rows:,} dòng inner-fit và {inner_validation_rows:,} dòng validation. Encoder được fit riêng trên inner-fit và validation chỉ được transform.
-- Với từng criterion, lấy pruning path, giữ mốc `ccp_alpha=0` làm đối chứng và lấy mẫu tối đa {MAX_ALPHA_CANDIDATES} cấu hình trải trên đường cắt tỉa. Số cấu hình thực tế: {candidate_counts}.
-- Cấu hình pruning của mỗi criterion được chọn bằng Accuracy validation cao nhất; nếu bằng nhau thì ưu tiên cây có ít lá/node hơn. Chỉ các ứng viên có `ccp_alpha > 0` mới được xem là mô hình pruned.
-- Sau khi khóa `criterion` và `ccp_alpha`, mô hình được fit lại trên toàn bộ 36,168 dòng train rồi đánh giá trên test chính thức.
+- Toàn bộ {official_train_rows:,} dòng train được đánh giá bằng Stratified {cv_folds}-fold CV có shuffle và `random_state=42`; encoder được fit lại riêng trong từng training fold.
+- Với từng criterion, dùng một lưới cố định, không phụ thuộc nhãn, gồm tối đa {MAX_ALPHA_CANDIDATES} giá trị từ `0` đến `{MAX_POSITIVE_ALPHA:g}`. Số cấu hình thực tế: {candidate_counts}.
+- Cả `criterion` và `ccp_alpha` được chọn bằng mean F1 của lớp `yes`; nếu bằng nhau thì ưu tiên Recall cao hơn, sau đó cây ít lá/node hơn. Chỉ ứng viên `ccp_alpha > 0` được xem là pruned.
+- Sau khi khóa cấu hình, mô hình được fit lại trên toàn bộ train rồi đánh giá đúng một lần trên test chính thức.
 
-## Kết quả chọn `ccp_alpha` trên validation
+## Kết quả chọn `ccp_alpha` bằng cross-validation
 
-| Criterion | Selected `ccp_alpha` | Inner-fit Accuracy | Validation Accuracy | Validation Error | Depth | Leaves | Nodes |
+| Criterion | Selected `ccp_alpha` | Mean CV F1 | Std CV F1 | Mean CV Recall | Depth | Leaves | Nodes |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 {selection_rows}
 
-![Quan hệ giữa pruning, kích thước cây và Accuracy]({relative_figures.as_posix()}/kiet_pruning_tradeoff.png)
+![Quan hệ giữa pruning, kích thước cây và F1]({relative_figures.as_posix()}/kiet_pruning_tradeoff.png)
 
 Đồ thị cho thấy `ccp_alpha` làm giảm dần số lá và thường thu hẹp chênh lệch train-validation. Cắt tỉa quá ít vẫn giữ nhiều nhánh đặc thù của tập train; cắt tỉa quá mạnh làm mất các quy tắc hữu ích và gây underfitting. Dấu sao là cấu hình được chọn cho từng criterion.
 
@@ -407,11 +475,11 @@ Phần này do **Thái Kiệt** phụ trách. Mục tiêu là giảm hiện tư�
 
 Hai dòng unpruned tách riêng ảnh hưởng của criterion; hai dòng pruned cho thấy ảnh hưởng kết hợp của criterion và `ccp_alpha`. Accuracy và Error Rate được báo cáo theo yêu cầu đề bài, còn Precision/Recall/F1/ROC-AUC giúp tránh kết luận sai khi lớp `yes` là lớp thiểu số.
 
-Xét riêng số liệu mô tả trên test, **{best_test['model']}** đạt Accuracy cao nhất ({float(best_test['accuracy']):.6f}) và Error Rate thấp nhất ({float(best_test['error_rate']):.6f}). Tuy nhiên, cấu hình chính vẫn được khóa bằng validation: Gini có Validation Accuracy {float(selected_by_criterion['gini']['validation_accuracy']):.6f} so với {float(selected_by_criterion['entropy']['validation_accuracy']):.6f} của Entropy. Không đổi lựa chọn sau khi xem test giúp tránh tối ưu gián tiếp trên tập test.
+Xét riêng số liệu mô tả trên test, **{best_test['model']}** đạt Accuracy cao nhất ({float(best_test['accuracy']):.6f}) và Error Rate thấp nhất ({float(best_test['error_rate']):.6f}). Tuy nhiên, cấu hình chính đã được khóa từ training CV: Gini có mean CV F1 {float(selected_by_criterion['gini']['mean_cv_f1']):.6f} so với {float(selected_by_criterion['entropy']['mean_cv_f1']):.6f} của Entropy. Không đổi lựa chọn sau khi xem test giúp tránh tối ưu gián tiếp trên tập test.
 
 ## Cây đã cắt tỉa được chọn
 
-Tiêu chí cuối cùng được khóa theo validation là **{selected_criterion.title()}**, với `ccp_alpha={float(winner['ccp_alpha']):.8g}`. Hình dưới chỉ hiển thị các tầng đầu để đọc được nhãn; các thống kê depth/leaves/nodes trong bảng được tính trên toàn bộ cây đã fit.
+Tiêu chí cuối cùng được khóa theo mean CV F1 là **{selected_criterion.title()}**, với `ccp_alpha={float(winner['ccp_alpha']):.8g}`. Hình dưới chỉ hiển thị các tầng đầu để đọc được nhãn; các thống kê depth/leaves/nodes trong bảng được tính trên toàn bộ cây đã fit.
 
 ![Các tầng đầu của cây đã cắt tỉa]({relative_figures.as_posix()}/kiet_pruned_tree_top_levels.png)
 
@@ -419,17 +487,17 @@ Tiêu chí cuối cùng được khóa theo validation là **{selected_criterion
 
 {interpretation}
 
-- Cấu hình được chọn theo validation đạt Accuracy test {float(winner['accuracy']):.6f}, {winner_direction} baseline {abs(winner_delta):.6f} điểm; Error Rate là {float(winner['error_rate']):.6f}.
+- Cấu hình được chọn theo CV F1 đạt Accuracy test {float(winner['accuracy']):.6f}, {winner_direction} baseline {abs(winner_delta):.6f} điểm; Error Rate là {float(winner['error_rate']):.6f}.
 - Gini đo mức không thuần bằng `1 - sum(p_k^2)`, còn Entropy dùng `-sum(p_k * log2(p_k))`. Hai tiêu chí có thể chọn các split khác nhau, nên pruning path, `ccp_alpha` tối ưu và kích thước cây cũng khác nhau.
 - Lợi ích chính của pruning không chỉ nằm ở Accuracy: cây nhỏ hơn giảm variance, chênh lệch train-test và chi phí diễn giải. Nếu Accuracy không tăng, kết quả vẫn cho biết mức đơn giản hóa đạt được và chỉ ra rằng cắt tỉa không tự động giải quyết mất cân bằng lớp.
 - Kết luận chỉ áp dụng cho split và pipeline cố định của nhóm. Không chọn lại cấu hình bằng kết quả test để tránh test leakage.
 
 ## Tệp kết quả phục vụ ghép báo cáo
 
-- `outputs/results/kiet_pruning_validation.csv`: toàn bộ điểm trên pruning path đã lấy mẫu.
+- `outputs/results/kiet_pruning_validation.csv`: toàn bộ điểm CV trên lưới alpha cố định.
 - `outputs/results/kiet_pruning_test_comparison.csv`: bảng so sánh baseline, Gini/Entropy và pruning.
 - `outputs/results/kiet_pruning_metrics.json`: cấu hình chọn, metric và audit split.
-- `outputs/trees/kiet_pruned_tree_model.joblib`: mô hình pruned được chọn theo validation.
+- `outputs/trees/kiet_pruned_tree_model.joblib`: mô hình pruned được chọn theo CV F1.
 """
     report_path.write_text(report, encoding="utf-8")
 
@@ -441,6 +509,8 @@ def run_pruning_workflow(
     trees_dir: str | Path = DEFAULT_TREES_OUTPUT,
     report_path: str | Path = DEFAULT_REPORT,
     max_alpha_candidates: int = MAX_ALPHA_CANDIDATES,
+    cv_folds: int = CV_FOLDS,
+    n_jobs: int | None = -1,
 ) -> dict[str, Any]:
     """Run Kiet's complete pruning experiment and write reproducible artifacts."""
 
@@ -457,28 +527,23 @@ def run_pruning_workflow(
         directory.mkdir(parents=True, exist_ok=True)
 
     split = load_and_split_data(test_size=TEST_SIZE, random_state=RANDOM_STATE)
-    X_inner_fit, X_validation, y_inner_fit, y_validation = train_test_split(
-        split.X_train,
-        split.y_train,
-        test_size=INNER_VALIDATION_SIZE,
-        random_state=RANDOM_STATE,
-        stratify=split.y_train,
-    )
-
-    inner_preprocessing = build_preprocessing_pipeline()
-    X_inner_fit_processed = inner_preprocessing.fit_transform(X_inner_fit)
-    X_validation_processed = inner_preprocessing.transform(X_validation)
+    preprocessing = build_preprocessing_pipeline()
+    X_train_processed = preprocessing.fit_transform(split.X_train)
+    X_test_processed = preprocessing.transform(split.X_test)
+    feature_names = get_encoded_feature_names(preprocessing)
+    cv = make_cv_strategy(cv_folds)
 
     candidate_tables = []
     selected_by_criterion: dict[str, dict[str, Any]] = {}
     for criterion in CRITERIA:
         candidates = evaluate_pruning_candidates(
-            X_inner_fit_processed,
-            y_inner_fit,
-            X_validation_processed,
-            y_validation,
+            split.X_train,
+            split.y_train,
+            X_train_processed,
             criterion=criterion,
+            cv=cv,
             max_candidates=max_alpha_candidates,
+            n_jobs=n_jobs,
         )
         candidate_tables.append(candidates)
         selected_by_criterion[criterion] = select_best_pruned_candidate(candidates)
@@ -490,17 +555,13 @@ def run_pruning_workflow(
     selected_criterion = min(
         CRITERIA,
         key=lambda name: (
-            -selected_by_criterion[name]["validation_accuracy"],
+            -selected_by_criterion[name]["mean_cv_f1"],
+            -selected_by_criterion[name]["mean_cv_recall"],
             selected_by_criterion[name]["leaves"],
             selected_by_criterion[name]["nodes"],
             CRITERIA.index(name),
         ),
     )
-
-    preprocessing = build_preprocessing_pipeline()
-    X_train_processed = preprocessing.fit_transform(split.X_train)
-    X_test_processed = preprocessing.transform(split.X_test)
-    feature_names = get_encoded_feature_names(preprocessing)
 
     model_specs = [
         ("Baseline (unpruned)", "gini", 0.0),
@@ -520,7 +581,7 @@ def run_pruning_workflow(
     evaluated: dict[str, dict[str, Any]] = {}
     reports: dict[str, pd.DataFrame] = {}
     validation_lookup = {
-        (row.criterion, float(row.ccp_alpha)): float(row.validation_accuracy)
+        (row.criterion, float(row.ccp_alpha)): float(row.mean_cv_f1)
         for row in validation.itertuples(index=False)
     }
 
@@ -550,7 +611,7 @@ def run_pruning_workflow(
                 model=fitted[model_name],
                 criterion=criterion,
                 ccp_alpha=alpha,
-                validation_accuracy=validation_lookup[(criterion, alpha)],
+                validation_f1=validation_lookup[(criterion, alpha)],
                 metrics=evaluated[model_name],
                 baseline_leaves=baseline_leaves,
             )
@@ -600,36 +661,47 @@ def run_pruning_workflow(
 
     train_indices = split.X_train.index.to_numpy(dtype=np.int64, copy=True)
     test_indices = split.X_test.index.to_numpy(dtype=np.int64, copy=True)
+    experiment_identity = build_experiment_identity(
+        DATASET_PATH,
+        train_indices,
+        test_indices,
+        test_size=TEST_SIZE,
+        random_state=RANDOM_STATE,
+        target_mapping=TARGET_MAPPING,
+    )
     payload = {
         "scope": "Thai Kiet - cost-complexity pruning and Gini/Entropy comparison",
         "selection_policy": {
             "test_set_used_for_selection": False,
-            "inner_validation_size": INNER_VALIDATION_SIZE,
-            "inner_fit_rows": int(len(y_inner_fit)),
-            "inner_validation_rows": int(len(y_validation)),
+            "scoring_metric": SCORING_METRIC,
+            "cv_strategy": (
+                f"StratifiedKFold(n_splits={cv_folds}, shuffle=True, "
+                f"random_state={RANDOM_STATE})"
+            ),
+            "cv_folds": int(cv_folds),
             "max_alpha_candidates_per_criterion": int(max_alpha_candidates),
+            "alpha_grid": "fixed label-independent geometric grid",
             "rule": (
-                "Highest inner-validation accuracy among ccp_alpha > 0; "
-                "ties prefer fewer leaves, fewer nodes, then smaller ccp_alpha."
+                "Highest mean positive-class CV F1 among ccp_alpha > 0; ties "
+                "prefer higher recall, fewer leaves, fewer nodes, then smaller alpha."
             ),
         },
         "split_audit": {
             "official_train_rows": int(len(split.y_train)),
             "official_test_rows": int(len(split.y_test)),
-            "train_indices_sha256": index_fingerprint(train_indices),
-            "test_indices_sha256": index_fingerprint(test_indices),
+            "train_indices_sha256": experiment_identity["train_indices_sha256"],
+            "test_indices_sha256": experiment_identity["test_indices_sha256"],
             "official_train_test_disjoint": bool(
                 np.intersect1d(train_indices, test_indices).size == 0
             ),
-            "inner_fit_validation_disjoint": bool(
-                set(X_inner_fit.index).isdisjoint(X_validation.index)
-            ),
+            "preprocessing_cv_fit_scope": "each training fold only",
             "test_partition_usage": "final evaluation only",
         },
         "selected_by_criterion": selected_by_criterion,
         "selected_criterion": selected_criterion,
         "selected_model": selected_model_name,
         "comparison": records,
+        "experiment_identity": experiment_identity,
     }
     save_json(payload, resolved_results / "kiet_pruning_metrics.json")
 
@@ -640,8 +712,8 @@ def run_pruning_workflow(
         comparison=comparison,
         selected_by_criterion=selected_by_criterion,
         selected_criterion=selected_criterion,
-        inner_fit_rows=len(y_inner_fit),
-        inner_validation_rows=len(y_validation),
+        cv_folds=cv_folds,
+        official_train_rows=len(split.y_train),
     )
 
     return {
@@ -649,6 +721,11 @@ def run_pruning_workflow(
         "selected_ccp_alpha": selected_alpha,
         "selected_model": selected_model_name,
         "selected_metrics": evaluated[selected_model_name],
+        "selected_complexity": {
+            "depth": int(selected_model.get_depth()),
+            "leaves": int(selected_model.get_n_leaves()),
+            "nodes": int(selected_model.tree_.node_count),
+        },
         "validation_candidates": int(len(validation)),
         "report": str(resolved_report),
         "comparison_csv": str(

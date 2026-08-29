@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
@@ -62,6 +63,40 @@ EXPECTED_COLUMNS = (
     TARGET_COLUMN,
 )
 
+# Domains documented by the UCI Bank Marketing data dictionary. ``unknown`` is
+# an observed, meaningful level and must not be treated as a missing value.
+CATEGORICAL_DOMAINS: dict[str, frozenset[str]] = {
+    "job": frozenset(
+        {
+            "admin.", "blue-collar", "entrepreneur", "housemaid", "management",
+            "retired", "self-employed", "services", "student", "technician",
+            "unemployed", "unknown",
+        }
+    ),
+    "marital": frozenset({"divorced", "married", "single"}),
+    "education": frozenset({"primary", "secondary", "tertiary", "unknown"}),
+    "default": frozenset({"no", "yes"}),
+    "housing": frozenset({"no", "yes"}),
+    "loan": frozenset({"no", "yes"}),
+    "contact": frozenset({"cellular", "telephone", "unknown"}),
+    "month": frozenset(
+        {"jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"}
+    ),
+    "poutcome": frozenset({"failure", "other", "success", "unknown"}),
+}
+
+# Inclusive bounds encode semantic constraints, not sample-specific extrema.
+# ``balance`` is intentionally unbounded because overdrafts are legitimate.
+NUMERICAL_BOUNDS: dict[str, tuple[int | None, int | None]] = {
+    "age": (0, 120),
+    "balance": (None, None),
+    "day": (1, 31),
+    "duration": (0, None),
+    "campaign": (1, None),
+    "pdays": (-1, None),
+    "previous": (0, None),
+}
+
 
 @dataclass(frozen=True)
 class DatasetSplit:
@@ -87,6 +122,72 @@ class DatasetSplit:
     random_state: int
 
 
+def validate_bank_data_frame(frame: pd.DataFrame) -> None:
+    """Reject malformed values even when a CSV happens to retain the schema.
+
+    The checks cover row identity, missing/duplicate observations, feature
+    dtypes, finite numerical values, documented categorical domains, semantic
+    numerical bounds, and the binary target. The function does not mutate the
+    supplied frame and is public so tests can exercise individual failure modes.
+    """
+
+    if tuple(frame.columns) != EXPECTED_COLUMNS:
+        raise ValueError(
+            "Unexpected dataset schema. "
+            f"Expected {list(EXPECTED_COLUMNS)}, got {frame.columns.tolist()}."
+        )
+    if frame.empty:
+        raise ValueError("The dataset is empty.")
+    if not frame.index.is_unique:
+        raise ValueError("Dataset row indices must be unique.")
+    if frame.duplicated().any():
+        raise ValueError(
+            f"Dataset contains {int(frame.duplicated().sum())} duplicate row(s)."
+        )
+    missing = frame.isna().sum()
+    if int(missing.sum()) > 0:
+        details = {name: int(count) for name, count in missing.items() if count}
+        raise ValueError(f"Dataset contains missing values: {details}.")
+
+    for feature in NUMERICAL_FEATURES:
+        series = frame[feature]
+        if not pd.api.types.is_integer_dtype(series.dtype):
+            raise ValueError(
+                f"Numerical feature '{feature}' must have an integer dtype; "
+                f"found {series.dtype}."
+            )
+        values = series.to_numpy(dtype=float, copy=False)
+        if not np.isfinite(values).all():
+            raise ValueError(f"Numerical feature '{feature}' contains non-finite values.")
+        lower, upper = NUMERICAL_BOUNDS[feature]
+        if lower is not None and bool((series < lower).any()):
+            raise ValueError(f"Numerical feature '{feature}' must be >= {lower}.")
+        if upper is not None and bool((series > upper).any()):
+            raise ValueError(f"Numerical feature '{feature}' must be <= {upper}.")
+
+    for feature in CATEGORICAL_FEATURES:
+        series = frame[feature]
+        if not pd.api.types.is_string_dtype(series.dtype):
+            raise ValueError(
+                f"Categorical feature '{feature}' must have a string dtype; "
+                f"found {series.dtype}."
+            )
+        unexpected = sorted(set(series.astype(str)).difference(CATEGORICAL_DOMAINS[feature]))
+        if unexpected:
+            raise ValueError(
+                f"Categorical feature '{feature}' contains values outside its "
+                f"documented domain: {unexpected}."
+            )
+
+    labels = set(frame[TARGET_COLUMN].astype(str).unique())
+    expected_labels = set(TARGET_MAPPING)
+    if labels != expected_labels:
+        raise ValueError(
+            f"Target '{TARGET_COLUMN}' must contain exactly "
+            f"{sorted(expected_labels)}; found {sorted(labels)}."
+        )
+
+
 def load_bank_data(path: str | Path = DEFAULT_DATA_PATH) -> pd.DataFrame:
     """Load the semicolon-delimited Bank Marketing dataset and validate it.
 
@@ -107,9 +208,9 @@ def load_bank_data(path: str | Path = DEFAULT_DATA_PATH) -> pd.DataFrame:
 
     Raises:
         FileNotFoundError: If ``path`` does not identify a regular file.
-        ValueError: If the CSV is empty, its schema differs from
-            :data:`EXPECTED_COLUMNS`, the target contains missing values, or the
-            target labels are not exactly ``"no"`` and ``"yes"``.
+        ValueError: If schema, row identity, completeness, dtypes, numerical
+            constraints, categorical domains, duplicates, or target labels fail
+            the documented dataset contract.
     """
 
     data_path = Path(path).expanduser().resolve()
@@ -117,22 +218,7 @@ def load_bank_data(path: str | Path = DEFAULT_DATA_PATH) -> pd.DataFrame:
         raise FileNotFoundError(f"Dataset not found: {data_path}")
 
     frame = pd.read_csv(data_path, sep=";")
-    if tuple(frame.columns) != EXPECTED_COLUMNS:
-        raise ValueError(
-            "Unexpected dataset schema. "
-            f"Expected {list(EXPECTED_COLUMNS)}, got {frame.columns.tolist()}."
-        )
-    if frame.empty:
-        raise ValueError("The dataset is empty.")
-
-    labels = set(frame[TARGET_COLUMN].dropna().unique())
-    expected_labels = set(TARGET_MAPPING)
-    if labels != expected_labels or frame[TARGET_COLUMN].isna().any():
-        raise ValueError(
-            f"Target '{TARGET_COLUMN}' must contain only {sorted(expected_labels)}. "
-            f"Found {sorted(labels)} and "
-            f"{int(frame[TARGET_COLUMN].isna().sum())} missing value(s)."
-        )
+    validate_bank_data_frame(frame)
 
     return frame
 

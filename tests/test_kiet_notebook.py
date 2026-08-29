@@ -41,6 +41,7 @@ class KietNotebookTests(unittest.TestCase):
         for required_text in (
             "Thái Kiệt",
             "ccp_alpha",
+            "mean_cv_f1",
             "Gini",
             "Entropy",
             "Confusion Matrix",

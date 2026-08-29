@@ -123,10 +123,12 @@ class HauHyperparameterTuningTests(unittest.TestCase):
             root = Path(temporary_directory)
             figures = root / "outputs" / "figures"
             results = root / "outputs" / "results"
+            trees = root / "outputs" / "trees"
             report = root / "docs" / "hau_improvement_methods.md"
             workflow = run_hau_hyperparameter_workflow(
                 figures_dir=figures,
                 results_dir=results,
+                trees_dir=trees,
                 report_path=report,
                 baseline_metrics=baseline_metrics,
                 baseline_complexity=baseline_complexity,
@@ -162,6 +164,7 @@ class HauHyperparameterTuningTests(unittest.TestCase):
             self.assertTrue(expected_results.issubset({path.name for path in results.iterdir()}))
             self.assertTrue(expected_figures.issubset({path.name for path in figures.iterdir()}))
             self.assertTrue(report.is_file())
+            self.assertTrue((trees / "hau_tuned_pipeline.joblib").is_file())
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("The single-parameter validation ranges were:", report_text)
             self.assertIn("The combined search ranges were:", report_text)
