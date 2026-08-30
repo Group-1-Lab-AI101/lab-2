@@ -82,10 +82,8 @@ Toàn bộ file sinh ra nằm dưới `outputs/`, toàn bộ tài liệu nằm d
 ## Yêu cầu môi trường
 
 - Windows, macOS hoặc Linux;
-- Python 3.10 trở lên (đã kiểm tra ở 3.14.4);
-- Graphviz không bắt buộc: file DOT vẫn được xuất mà không cần cài Graphviz;
-- khuyến nghị dùng `uv` để dependency luôn được cài trong `.venv`, không cài vào
-  Python hệ thống.
+- Python 3.12 trở lên (đã kiểm tra ở 3.14.4);
+- Graphviz không bắt buộc: file DOT vẫn được xuất mà không cần cài Graphviz.
 
 Dataset chính thức nằm tại `data/bank-full.csv`, SHA-256:
 
@@ -93,49 +91,40 @@ Dataset chính thức nằm tại `data/bank-full.csv`, SHA-256:
 d1513ec63b385506f7cfce9f2c5caa9fe99e7ba4e8c3fa264b3aaf0f849ed32d
 ```
 
-## Tạo môi trường bằng `uv` — khuyến nghị
+## Tạo môi trường và cài đặt bằng Python/pip
 
-Các lệnh này giống nhau trên Linux, macOS và Windows, chạy tại thư mục gốc dự
-án. `uv` tự tìm `.venv` nên không cần activate trước khi cài hoặc chạy:
-
-```bash
-uv venv --python 3.14.4
-uv pip install -r requirements-lock.txt
-uv run python run_all.py
-```
-
-Nếu muốn activate thủ công:
-
-| Nền tảng / shell | Lệnh |
-| --- | --- |
-| Linux hoặc macOS (`bash`, `zsh`) | `source .venv/bin/activate` |
-| Windows PowerShell | `.venv\Scripts\Activate.ps1` |
-| Windows Command Prompt | `.venv\Scripts\activate.bat` |
-
-## Cài đặt bằng Python/pip
+Các lệnh dưới đây tạo `.venv` ngay trong thư mục dự án. Cài
+`requirements.txt` là đủ để chạy toàn bộ workflow Python và nhẹ hơn môi trường
+Jupyter đầy đủ.
 
 ### Linux hoặc macOS
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -r requirements-lock.txt
-.venv/bin/python run_all.py
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-### Windows PowerShell hoặc Command Prompt
+### Windows PowerShell
 
 ```powershell
 py -m venv .venv
-.venv\Scripts\python.exe -m pip install --upgrade pip
-.venv\Scripts\python.exe -m pip install -r requirements-lock.txt
-.venv\Scripts\python.exe run_all.py
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-Tất cả cách cài đặt trên đều đưa dependency vào `.venv` của dự án.
-`requirements-lock.txt` tái tạo đúng môi trường đã chạy kiểm thử; `requirements.txt`
-giữ các khoảng phiên bản runtime, còn `requirements-notebook.txt` bổ sung công
-cụ Jupyter để thuận tiện khi chủ động nâng cấp và kiểm tra lại.
+Trong Windows Command Prompt, dùng `.venv\Scripts\activate.bat` thay cho lệnh
+activate PowerShell.
+
+Các file dependency có mục đích riêng:
+
+- `requirements.txt`: dependency runtime cần để chạy `run_all.py`;
+- `requirements-notebook.txt`: runtime cộng JupyterLab và công cụ notebook;
+- `requirements-lock.txt`: toàn bộ môi trường Python 3.14.4 đã kiểm thử, bao gồm
+  các dependency gián tiếp và Jupyter; dùng khi cần tái tạo chính xác môi trường
+  thay vì cài đặt tối giản.
 
 ## Chạy workflow duy nhất
 
@@ -148,20 +137,20 @@ Phần dữ liệu và preprocessing được giữ ở dạng module Python dù
 trình bày chỉ import các module này và không sao chép pipeline.
 
 ```bash
-uv run python run_all.py
+python run_all.py
 ```
 
 Không sinh lại hình EDA nhưng vẫn chạy toàn bộ phần dữ liệu, baseline, tuning,
 pre-call sensitivity, pruning và class weighting:
 
 ```bash
-uv run python run_all.py --skip-figures
+python run_all.py --skip-figures
 ```
 
 Đổi thư mục đầu ra khi cần:
 
 ```bash
-uv run python run_all.py \
+python run_all.py \
   --figures-dir outputs/figures \
   --results-dir outputs/results \
   --trees-dir outputs/trees \
@@ -194,7 +183,8 @@ Notebook đã chạy sẵn trình bày kiểm tra dữ liệu, EDA, class imbala
 encoding, official stratified split, one-hot preprocessing và leakage audit:
 
 ```bash
-uv run jupyter lab notebooks/khang_data_eda_preprocessing.ipynb
+python -m pip install -r requirements-notebook.txt
+jupyter lab notebooks/khang_data_eda_preprocessing.ipynb
 ```
 
 Notebook gọi trực tiếp `src.data`, `src.eda`, `src.preprocessing` và
@@ -205,7 +195,8 @@ For presentation or video recording, open the English notebook
 [`notebooks/2-BASELINE-DECISION-TREE.ipynb`](notebooks/2-BASELINE-DECISION-TREE.ipynb):
 
 ```bash
-.venv/bin/jupyter lab
+python -m pip install -r requirements-notebook.txt
+jupyter lab notebooks/2-BASELINE-DECISION-TREE.ipynb
 ```
 
 Select **Run All Cells**. The notebook directly reuses the shared `src.data` and
@@ -214,7 +205,7 @@ curve, tree structure, feature importance, representative rules, and baseline
 interpretation. It can also be executed without the graphical interface:
 
 ```bash
-.venv/bin/jupyter nbconvert --to notebook --execute --inplace \
+jupyter nbconvert --to notebook --execute --inplace \
   notebooks/2-BASELINE-DECISION-TREE.ipynb
 ```
 
@@ -251,13 +242,11 @@ training fold.
 
 ## Kiểm thử
 
-Với `uv`:
-
 ```bash
-uv run python -m unittest discover -s tests -v
+python -m unittest discover -s tests -v
 ```
 
-Hoặc gọi Python trong `.venv` trực tiếp:
+Nếu chưa activate `.venv`, gọi Python trong môi trường trực tiếp:
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -v
@@ -269,10 +258,10 @@ Trên Windows, thay `.venv/bin/python` bằng `.venv\Scripts\python.exe`.
 
 Notebook đã chạy sẵn gồm alpha grid cố định, đường Mean CV F1, bảng test
 Gini/Entropy, Accuracy/Error rate, Confusion Matrix và phân tích kích thước cây.
-Cài môi trường và mở notebook bằng hai lệnh:
+Để mở notebook, cài thêm môi trường notebook rồi khởi động JupyterLab:
 
-    uv pip install -r requirements-notebook.txt
-    uv run jupyter lab notebooks/kiet_pruning_visualization.ipynb
+    python -m pip install -r requirements-notebook.txt
+    jupyter lab notebooks/kiet_pruning_visualization.ipynb
 
 Trong JupyterLab hoặc VS Code, chọn **Run All Cells** để tái tạo toàn bộ bảng và
 biểu đồ. Notebook chỉ chạy lại workflow pruning khi thiếu kết quả thí nghiệm.
@@ -282,7 +271,7 @@ biểu đồ. Notebook chỉ chạy lại workflow pruning khi thiếu kết qu�
 Notebook đã chạy sẵn trình bày class imbalance, validation các `class_weight`,
 Confusion Matrix, bảng `Comparison of Results` và `Conclusion`:
 
-    uv run jupyter lab notebooks/trung_class_weight_and_comparison.ipynb
+    jupyter lab notebooks/trung_class_weight_and_comparison.ipynb
 
 Notebook đọc các artifact do `src/trung_class_weight.py` sinh ra và chỉ chạy lại
 workflow khi thiếu kết quả. Structural controls được khóa từ workflow Hậu trước
