@@ -11,6 +11,7 @@ class ProjectStructureTests(unittest.TestCase):
     def test_all_notebooks_are_consolidated(self) -> None:
         notebooks_dir = PROJECT_ROOT / "notebooks"
         expected = {
+            "khang_data_eda_preprocessing.ipynb",
             "2-BASELINE-DECISION-TREE.ipynb",
             "kiet_pruning_visualization.ipynb",
             "trung_class_weight_and_comparison.ipynb",

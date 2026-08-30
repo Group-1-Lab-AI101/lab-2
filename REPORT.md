@@ -343,7 +343,7 @@ The complete Python source, tests, notebooks, generated tables, and experiment a
 | G5 — Tree interpretation | Pass | The code exports the full DOT tree, structural/readable figures, early splits, representative rules with held-out support/purity audits, feature importance, and complexity statistics. |
 | G6 — Three improvements | Pass | Structural tuning, F1-CV cost-complexity pruning/criterion comparison, and structurally regularized class weighting are implemented with training-only selection and final held-out results. |
 | G7 — Fair comparison | Pass | Official models use the same dataset, target, preprocessing contract, test split, and metrics. Results are passed in memory by the unified runner; standalone artifact loading validates the complete experiment identity. |
-| G8 — Reproducibility | Pass | `run_all.py` reproduces the workflow; exact dependencies are locked; tuned pipelines are saved; generated report blocks are tested against artifacts; 45 automated tests pass. |
+| G8 — Reproducibility | Pass | `run_all.py` reproduces the workflow; exact dependencies are locked; tuned pipelines are saved; generated report blocks are tested against artifacts; 47 automated tests pass. |
 
 ### 11.2. Commands Used for Verification
 
@@ -354,14 +354,14 @@ The complete Python source, tests, notebooks, generated tables, and experiment a
 .venv/bin/python run_all.py
 ```
 
-The test result was **45 passed, 0 failed, 0 errors**. The end-to-end run completed successfully and reproduced the four official model Accuracy values exactly:
+The test result was **47 passed, 0 failed, 0 errors**. The end-to-end run completed successfully and reproduced the four official model Accuracy values exactly:
 
 - Baseline: 0.8737144753
 - Tuned: 0.9004755059
 - Pruned Entropy: 0.9044564857
 - Weighted + tuned: 0.8801282760
 
-The three committed notebooks are consolidated under `notebooks/`, have execution counts, and contain no stored error output. Shared metrics and confusion-matrix logic live in `src/evaluation.py`; tree-specific training and interpretation remain in `src/baseline_tree.py`. The obsolete empty `src/evaluate.py` placeholder was removed.
+The four committed notebooks are consolidated under `notebooks/`, have execution counts, and contain no stored error output. Shared metrics and confusion-matrix logic live in `src/evaluation.py`; tree-specific training and interpretation remain in `src/baseline_tree.py`. The obsolete empty `src/evaluate.py` placeholder was removed.
 
 ### 11.3. Implemented Robustness Corrections
 

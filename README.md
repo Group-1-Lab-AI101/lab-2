@@ -37,6 +37,7 @@ lab-2/
 │   ├── bank-full.csv
 │   └── bank-names.txt
 ├── notebooks/
+│   ├── khang_data_eda_preprocessing.ipynb # dataset, EDA và shared preprocessing
 │   ├── 2-BASELINE-DECISION-TREE.ipynb    # English presentation notebook
 │   ├── kiet_pruning_visualization.ipynb  # thí nghiệm pruning và trực quan hóa
 │   └── trung_class_weight_and_comparison.ipynb # class weight và kết luận
@@ -186,6 +187,19 @@ Kết quả mặc định:
 - `docs/kiet_pruning_and_criterion.md`: phần Improvement Methods - Phương pháp 2;
 - `docs/trung_class_weight_and_conclusion.md`: class weight và kết luận toàn nhóm;
 - `docs/BASELINE_HANDOFF.md`: hợp đồng thí nghiệm và hướng dẫn bàn giao.
+
+## Notebook phần Khang
+
+Notebook đã chạy sẵn trình bày kiểm tra dữ liệu, EDA, class imbalance, target
+encoding, official stratified split, one-hot preprocessing và leakage audit:
+
+```bash
+uv run jupyter lab notebooks/khang_data_eda_preprocessing.ipynb
+```
+
+Notebook gọi trực tiếp `src.data`, `src.eda`, `src.preprocessing` và
+`src.visualization`. Chọn **Run All Cells** để tái tạo bốn hình EDA và kiểm tra
+lại hợp đồng dữ liệu dùng chung; notebook không tạo split hoặc encoder riêng.
 
 For presentation or video recording, open the English notebook
 [`notebooks/2-BASELINE-DECISION-TREE.ipynb`](notebooks/2-BASELINE-DECISION-TREE.ipynb):
