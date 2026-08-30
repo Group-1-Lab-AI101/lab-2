@@ -12,7 +12,7 @@ class ProjectStructureTests(unittest.TestCase):
         notebooks_dir = PROJECT_ROOT / "notebooks"
         expected = {
             "khang_data_eda_preprocessing.ipynb",
-            "2-BASELINE-DECISION-TREE.ipynb",
+            "hoang_baseline_decision_tree.ipynb",
             "kiet_pruning_visualization.ipynb",
             "trung_class_weight_and_comparison.ipynb",
         }
@@ -46,7 +46,8 @@ class ProjectStructureTests(unittest.TestCase):
             self.assertNotIn("from src.baseline_tree import evaluate_classifier", source)
 
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("notebooks/2-BASELINE-DECISION-TREE.ipynb", readme)
+        self.assertIn("notebooks/hoang_baseline_decision_tree.ipynb", readme)
+        self.assertNotIn("notebooks/2-BASELINE-DECISION-TREE.ipynb", readme)
         self.assertNotIn("experiments/2-BASELINE-DECISION-TREE.ipynb", readme)
 
 

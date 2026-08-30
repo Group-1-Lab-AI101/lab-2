@@ -38,7 +38,7 @@ lab-2/
 │   └── bank-names.txt
 ├── notebooks/
 │   ├── khang_data_eda_preprocessing.ipynb # dataset, EDA và shared preprocessing
-│   ├── 2-BASELINE-DECISION-TREE.ipynb    # English presentation notebook
+│   ├── hoang_baseline_decision_tree.ipynb # English presentation notebook
 │   ├── kiet_pruning_visualization.ipynb  # thí nghiệm pruning và trực quan hóa
 │   └── trung_class_weight_and_comparison.ipynb # class weight và kết luận
 ├── docs/
@@ -192,11 +192,11 @@ Notebook gọi trực tiếp `src.data`, `src.eda`, `src.preprocessing` và
 lại hợp đồng dữ liệu dùng chung; notebook không tạo split hoặc encoder riêng.
 
 For presentation or video recording, open the English notebook
-[`notebooks/2-BASELINE-DECISION-TREE.ipynb`](notebooks/2-BASELINE-DECISION-TREE.ipynb):
+[`notebooks/hoang_baseline_decision_tree.ipynb`](notebooks/hoang_baseline_decision_tree.ipynb):
 
 ```bash
 python -m pip install -r requirements-notebook.txt
-jupyter lab notebooks/2-BASELINE-DECISION-TREE.ipynb
+jupyter lab notebooks/hoang_baseline_decision_tree.ipynb
 ```
 
 Select **Run All Cells**. The notebook directly reuses the shared `src.data` and
@@ -206,7 +206,7 @@ interpretation. It can also be executed without the graphical interface:
 
 ```bash
 jupyter nbconvert --to notebook --execute --inplace \
-  notebooks/2-BASELINE-DECISION-TREE.ipynb
+  notebooks/hoang_baseline_decision_tree.ipynb
 ```
 
 `run_all.py` remains the canonical entry point for reproducible artifacts and
