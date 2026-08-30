@@ -154,7 +154,7 @@ preprocessor fitting, feature-name alignment, and probability-based ROC-AUC.
 Compatible runtime dependency ranges are in `requirements.txt`; notebook tools
 are layered on by `requirements-notebook.txt`. The complete executed environment
 is pinned in `requirements-lock.txt`, and core versions are also recorded in
-`outputs/results/run_manifest.json`.
+`outputs/results/hoang_run_manifest.json`.
 
 `duration` is known only after a marketing call finishes. Keeping it matches the
 selected dataset baseline, but it is unavailable for pre-call prediction. This

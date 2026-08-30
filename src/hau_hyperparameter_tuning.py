@@ -356,8 +356,8 @@ def load_baseline_reference(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Read Hoang's generated frozen metrics and complexity artifacts."""
 
-    metrics_path = Path(results_dir).expanduser().resolve() / "baseline_metrics.json"
-    statistics_path = Path(trees_dir).expanduser().resolve() / "tree_analysis.json"
+    metrics_path = Path(results_dir).expanduser().resolve() / "hoang_baseline_metrics.json"
+    statistics_path = Path(trees_dir).expanduser().resolve() / "hoang_tree_analysis.json"
     if not metrics_path.is_file() or not statistics_path.is_file():
         raise FileNotFoundError(
             "Frozen baseline artifacts are required before Hau's comparison: "

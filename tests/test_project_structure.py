@@ -30,6 +30,50 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertFalse((PROJECT_ROOT / "outputs" / "figures" / "baseline").exists())
         self.assertFalse((PROJECT_ROOT / "src" / "evaluate.py").exists())
 
+    def test_hoang_artifacts_use_owner_prefix(self) -> None:
+        outputs = PROJECT_ROOT / "outputs"
+        expected = {
+            outputs / "figures" / "hoang_confusion_matrix.png",
+            outputs / "figures" / "hoang_baseline_tree_top_levels.png",
+            outputs / "figures" / "hoang_baseline_tree_full_structure.png",
+            outputs / "figures" / "hoang_top_feature_importance.png",
+            outputs / "results" / "hoang_baseline_metrics.json",
+            outputs / "results" / "hoang_baseline_metrics.csv",
+            outputs / "results" / "hoang_classification_report.csv",
+            outputs / "results" / "hoang_feature_importance.csv",
+            outputs / "results" / "hoang_preprocessing_audit.json",
+            outputs / "results" / "hoang_run_manifest.json",
+            outputs / "trees" / "hoang_tree_analysis.json",
+            outputs / "trees" / "hoang_early_splits.json",
+            outputs / "trees" / "hoang_early_tree.txt",
+            outputs / "trees" / "hoang_representative_rules.md",
+            outputs / "trees" / "hoang_representative_rules_audit.json",
+            outputs / "trees" / "hoang_baseline_tree_full.dot",
+            outputs / "trees" / "hoang_baseline_tree_model.joblib",
+        }
+        self.assertTrue(all(path.is_file() for path in expected))
+
+        obsolete = {
+            outputs / "figures" / "confusion_matrix.png",
+            outputs / "figures" / "baseline_tree_top_levels.png",
+            outputs / "figures" / "baseline_tree_full_structure.png",
+            outputs / "figures" / "top_feature_importance.png",
+            outputs / "results" / "baseline_metrics.json",
+            outputs / "results" / "baseline_metrics.csv",
+            outputs / "results" / "classification_report.csv",
+            outputs / "results" / "feature_importance.csv",
+            outputs / "results" / "preprocessing_audit.json",
+            outputs / "results" / "run_manifest.json",
+            outputs / "trees" / "tree_analysis.json",
+            outputs / "trees" / "early_splits.json",
+            outputs / "trees" / "early_tree.txt",
+            outputs / "trees" / "representative_rules.md",
+            outputs / "trees" / "representative_rules_audit.json",
+            outputs / "trees" / "baseline_tree_full.dot",
+            outputs / "trees" / "baseline_tree_model.joblib",
+        }
+        self.assertFalse(any(path.exists() for path in obsolete))
+
     def test_evaluation_has_one_shared_module(self) -> None:
         evaluation = PROJECT_ROOT / "src" / "evaluation.py"
         self.assertTrue(evaluation.is_file())

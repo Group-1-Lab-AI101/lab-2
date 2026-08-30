@@ -52,13 +52,13 @@ class ArtifactIntegrityTests(unittest.TestCase):
             results.mkdir()
             trees.mkdir()
 
-            (results / "baseline_metrics.json").write_text(
+            (results / "hoang_baseline_metrics.json").write_text(
                 json.dumps(METRICS), encoding="utf-8"
             )
-            (trees / "tree_analysis.json").write_text(
+            (trees / "hoang_tree_analysis.json").write_text(
                 json.dumps(COMPLEXITY), encoding="utf-8"
             )
-            (results / "run_manifest.json").write_text(
+            (results / "hoang_run_manifest.json").write_text(
                 json.dumps({"experiment_identity": IDENTITY}), encoding="utf-8"
             )
             (results / "hau_best_parameters.json").write_text(

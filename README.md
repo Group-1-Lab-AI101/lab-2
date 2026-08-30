@@ -177,6 +177,10 @@ Kết quả mặc định:
 - `docs/trung_class_weight_and_conclusion.md`: class weight và kết luận toàn nhóm;
 - `docs/BASELINE_HANDOFF.md`: hợp đồng thí nghiệm và hướng dẫn bàn giao.
 
+Các artifact thuộc riêng frozen baseline của Hoàng dùng tiền tố `hoang_` trong
+`outputs/figures/`, `outputs/results/` và `outputs/trees/`. Artifact dùng chung
+như `outputs/shared/`, bootstrap và team comparison không gắn tên cá nhân.
+
 ## Notebook phần Khang
 
 Notebook đã chạy sẵn trình bày kiểm tra dữ liệu, EDA, class imbalance, target

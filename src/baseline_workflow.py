@@ -234,7 +234,7 @@ Because the held-out set is imbalanced, an always-`{majority_class_name}` refere
 
 ## Confusion Matrix
 
-![Baseline confusion matrix]({relative_figures / 'confusion_matrix.png'})
+![Baseline confusion matrix]({relative_figures / 'hoang_confusion_matrix.png'})
 
 The class order is `{metrics['class_labels'][0]}`, `{metrics['class_labels'][1]}`. Therefore, the matrix is `[[{matrix[0][0]}, {matrix[0][1]}], [{matrix[1][0]}, {matrix[1][1]}]]`: {matrix[0][0]} true negatives, {matrix[0][1]} false positives, {matrix[1][0]} false negatives, and {matrix[1][1]} true positives. The horizontal axis is the predicted label and the vertical axis is the true label.
 
@@ -244,11 +244,11 @@ The class order is `{metrics['class_labels'][0]}`, `{metrics['class_labels'][1]}
 
 The fitted baseline has depth **{statistics['depth']}**, **{statistics['nodes']:,} nodes**, and **{statistics['leaves']:,} leaves**. Its training accuracy is {metrics['train_accuracy']:.6f}, versus {metrics['test_accuracy']:.6f} on the test set, a gap of {metrics['train_test_accuracy_gap']:.6f}. {overfit_statement}: the unrestricted tree fits the training observations{' perfectly' if metrics['train_accuracy'] == 1.0 else ' very closely'} but generalizes substantially less accurately. This diagnosis describes the measured baseline and is not the result of tuning.
 
-![Full baseline tree structure]({relative_figures / 'baseline_tree_full_structure.png'})
+![Full baseline tree structure]({relative_figures / 'hoang_baseline_tree_full_structure.png'})
 
 The full structural view contains every node, with colour indicating the node's predicted class. Labels are intentionally omitted at this scale. The following unchanged-model view displays the first levels with readable node labels; it is a presentation truncation, not a smaller retrained tree.
 
-![Baseline tree top levels]({relative_figures / 'baseline_tree_top_levels.png'})
+![Baseline tree top levels]({relative_figures / 'hoang_baseline_tree_top_levels.png'})
 
 ## Important Splits and Decision Rules
 
@@ -264,7 +264,7 @@ Representative fitted leaf rules were selected programmatically for high support
 
 {chr(10).join(rule_sections)}
 
-These rules describe associations learned by this fitted tree. They should not be interpreted as causal effects. The exact early-level tree text is saved in `{relative_trees / 'early_tree.txt'}`, and the complete labeled tree is available in `{relative_trees / 'baseline_tree_full.dot'}`.
+These rules describe associations learned by this fitted tree. They should not be interpreted as causal effects. The exact early-level tree text is saved in `{relative_trees / 'hoang_early_tree.txt'}`, and the complete labeled tree is available in `{relative_trees / 'hoang_baseline_tree_full.dot'}`.
 
 ## Feature Importance
 
@@ -274,7 +274,7 @@ The tree's impurity-based `feature_importances_` values were mapped one-to-one t
 | ---: | --- | ---: |
 {feature_rows}
 
-![Top feature importances]({relative_figures / 'top_feature_importance.png'})
+![Top feature importances]({relative_figures / 'hoang_top_feature_importance.png'})
 
 An importance value is the normalized total impurity reduction attributed to a transformed feature. It indicates how much the fitted tree used that feature, but it does not establish causality and may favour variables offering many possible split points.
 
@@ -403,53 +403,53 @@ def run_baseline_workflow(
         split.y_test,
     )
 
-    save_json(metrics, resolved_results / "baseline_metrics.json")
+    save_json(metrics, resolved_results / "hoang_baseline_metrics.json")
     pd.DataFrame(
         [(key, value) for key, value in metrics.items() if isinstance(value, (int, float, str))],
         columns=["Metric", "Result"],
-    ).to_csv(resolved_results / "baseline_metrics.csv", index=False)
+    ).to_csv(resolved_results / "hoang_baseline_metrics.csv", index=False)
     classification_report_frame.to_csv(
-        resolved_results / "classification_report.csv"
+        resolved_results / "hoang_classification_report.csv"
     )
-    importance.to_csv(resolved_results / "feature_importance.csv", index=False)
-    save_json(statistics, resolved_trees / "tree_analysis.json")
-    save_json({"splits": early_splits}, resolved_trees / "early_splits.json")
-    save_json(audit, resolved_results / "preprocessing_audit.json")
-    (resolved_trees / "early_tree.txt").write_text(
+    importance.to_csv(resolved_results / "hoang_feature_importance.csv", index=False)
+    save_json(statistics, resolved_trees / "hoang_tree_analysis.json")
+    save_json({"splits": early_splits}, resolved_trees / "hoang_early_splits.json")
+    save_json(audit, resolved_results / "hoang_preprocessing_audit.json")
+    (resolved_trees / "hoang_early_tree.txt").write_text(
         extract_early_tree_text(model, feature_names), encoding="utf-8"
     )
-    write_representative_rules(rules, resolved_trees / "representative_rules.md")
-    save_json({"rules": rules}, resolved_trees / "representative_rules_audit.json")
+    write_representative_rules(rules, resolved_trees / "hoang_representative_rules.md")
+    save_json({"rules": rules}, resolved_trees / "hoang_representative_rules_audit.json")
 
     plot_confusion_matrix(
         split.y_test,
         y_test_pred,
         model.classes_,
-        resolved_figures / "confusion_matrix.png",
+        resolved_figures / "hoang_confusion_matrix.png",
         class_display_names=CLASS_DISPLAY_NAMES,
         title="Baseline Decision Tree - Confusion Matrix",
     )
     plot_tree_top_levels(
         model,
         feature_names,
-        resolved_figures / "baseline_tree_top_levels.png",
+        resolved_figures / "hoang_baseline_tree_top_levels.png",
         class_display_names=CLASS_DISPLAY_NAMES,
     )
     plot_full_tree_structure(
         model,
-        resolved_figures / "baseline_tree_full_structure.png",
+        resolved_figures / "hoang_baseline_tree_full_structure.png",
         class_display_names=CLASS_DISPLAY_NAMES,
     )
     export_full_tree_dot(
         model,
         feature_names,
-        resolved_trees / "baseline_tree_full.dot",
+        resolved_trees / "hoang_baseline_tree_full.dot",
         class_display_names=CLASS_DISPLAY_NAMES,
     )
     plot_feature_importance(
-        importance, resolved_figures / "top_feature_importance.png", top_n=15
+        importance, resolved_figures / "hoang_top_feature_importance.png", top_n=15
     )
-    joblib.dump(model, resolved_trees / "baseline_tree_model.joblib")
+    joblib.dump(model, resolved_trees / "hoang_baseline_tree_model.joblib")
     joblib.dump(
         preprocessing_pipeline,
         resolved_shared_output / "preprocessor.joblib",
@@ -519,7 +519,7 @@ def run_baseline_workflow(
             "joblib": joblib.__version__,
         },
     }
-    save_json(manifest, resolved_results / "run_manifest.json")
+    save_json(manifest, resolved_results / "hoang_run_manifest.json")
 
     render_baseline_report(
         report_path=resolved_report,

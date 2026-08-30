@@ -221,16 +221,16 @@ def load_team_references(
     results = Path(results_dir).resolve()
     trees = Path(trees_dir).resolve()
     baseline_manifest = json.loads(
-        (results / "run_manifest.json").read_text(encoding="utf-8")
+        (results / "hoang_run_manifest.json").read_text(encoding="utf-8")
     )
     hau_summary = json.loads(
         (results / "hau_best_parameters.json").read_text(encoding="utf-8")
     )
     baseline_metrics = json.loads(
-        (results / "baseline_metrics.json").read_text(encoding="utf-8")
+        (results / "hoang_baseline_metrics.json").read_text(encoding="utf-8")
     )
     baseline_complexity = json.loads(
-        (trees / "tree_analysis.json").read_text(encoding="utf-8")
+        (trees / "hoang_tree_analysis.json").read_text(encoding="utf-8")
     )
     hau = _load_metric_csv(results / "hau_tuned_tree_metrics.csv")
     kiet_payload = json.loads(

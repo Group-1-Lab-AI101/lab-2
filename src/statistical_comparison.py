@@ -152,7 +152,10 @@ def run_statistical_comparison_workflow(
     )
     kiet_name = f"Kiet {kiet_summary['selected_model']}"
     models = {
-        "Hoang Baseline": (joblib.load(trees / "baseline_tree_model.joblib"), X_test_processed),
+        "Hoang Baseline": (
+            joblib.load(trees / "hoang_baseline_tree_model.joblib"),
+            X_test_processed,
+        ),
         "Hau Tuned": (joblib.load(trees / "hau_tuned_pipeline.joblib"), split.X_test),
         kiet_name: (joblib.load(trees / "kiet_pruned_tree_model.joblib"), X_test_processed),
         "Trung Weighted + Tuned": (

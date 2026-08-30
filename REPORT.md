@@ -133,7 +133,7 @@ The baseline is an untuned `DecisionTreeClassifier` with Gini impurity, the best
 
 The test Confusion Matrix, ordered as `no`, `yes`, is `[[7403, 582], [560, 498]]`. Thus, the baseline produces 7,403 true negatives, 582 false positives, 560 false negatives, and 498 true positives.
 
-![Baseline confusion matrix](outputs/figures/confusion_matrix.png)
+![Baseline confusion matrix](outputs/figures/hoang_confusion_matrix.png)
 
 An always-`no` classifier would achieve 0.883003 Accuracy on this test set, which is higher than the baseline. However, it would detect no subscriptions. This comparison reinforces why the positive-class metrics are required.
 
@@ -143,11 +143,11 @@ An always-`no` classifier would achieve 0.883003 Accuracy on this test set, whic
 
 The fitted baseline has depth 34, 5,751 nodes, and 2,876 leaves. Its perfect training Accuracy and much lower test Accuracy produce a gap of 0.126286. This is strong evidence that the unrestricted tree has learned highly specific training patterns and is overfitting.
 
-![Full baseline tree structure](outputs/figures/baseline_tree_full_structure.png)
+![Full baseline tree structure](outputs/figures/hoang_baseline_tree_full_structure.png)
 
 The full structure is too large to label legibly in one image, so a second visualization presents only the top levels of the same fitted model. It is a display truncation, not a retrained tree.
 
-![Baseline tree top levels](outputs/figures/baseline_tree_top_levels.png)
+![Baseline tree top levels](outputs/figures/hoang_baseline_tree_top_levels.png)
 
 ### 7.2. Important Splits and Decision Rules
 
@@ -169,7 +169,7 @@ Representative learned rules include the following:
 - A selected `yes` rule with `521.5 < duration <= 827.5`, previous-campaign success, no housing loan, and additional conditions has 55 training rows at purity 1.000; its 21 matching held-out rows have purity 0.810.
 - The two selected `no` rules have held-out supports of 23 and 7, with purities 1.000 and 0.714 respectively.
 
-These audits show that training-leaf purity does not automatically transfer to unseen rows. The paths describe associations in the fitted model; they are not causal statements. Full per-rule support and purity are stored in `outputs/trees/representative_rules_audit.json`.
+These audits show that training-leaf purity does not automatically transfer to unseen rows. The paths describe associations in the fitted model; they are not causal statements. Full per-rule support and purity are stored in `outputs/trees/hoang_representative_rules_audit.json`.
 
 ### 7.3. Feature Importance
 
@@ -186,7 +186,7 @@ These audits show that training-leaf purity does not automatically transfer to u
 | 9 | `month_mar` | 0.014057 |
 | 10 | `month_jun` | 0.013801 |
 
-![Top feature importance](outputs/figures/top_feature_importance.png)
+![Top feature importance](outputs/figures/hoang_top_feature_importance.png)
 
 Impurity-based importance measures how much the fitted tree used a feature to reduce impurity. It does not establish causality and can favor variables that offer many possible split points.
 
